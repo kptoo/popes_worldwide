@@ -34,16 +34,16 @@ html, body, #map {
     }
 }
 
-/* Panel styling with enhanced light blue color scheme */
+/* Panel styling with enhanced color scheme for dark map */
 .panel {
     position: absolute;
     z-index: 1000;
     background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
     padding: 15px;
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     transition: all 0.3s ease;
-    border: 1px solid rgba(33, 150, 243, 0.2);
+    border: 1px solid rgba(33, 150, 243, 0.3);
     max-width: 90%;
     backdrop-filter: blur(10px);
 }
@@ -54,10 +54,10 @@ html, body, #map {
     align-items: center;
     cursor: pointer;
     padding: 10px;
-    background: linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%);
+    background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
     border-radius: 8px;
     margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(100, 181, 246, 0.3);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.4);
 }
 
 .panel-header h4 {
@@ -345,16 +345,16 @@ html, body, #map {
     box-shadow: 0 6px 20px rgba(66, 165, 245, 0.4);
 }
 
-/* Legend V2 - Always visible with beautiful styling */
+/* Legend V2 - Always visible with beautiful styling for dark map */
 #legend-v2 {
     position: absolute;
     bottom: 20px;
     left: 20px;
     background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
-    border: 2px solid rgba(33, 150, 243, 0.2);
+    border: 2px solid rgba(25, 118, 210, 0.3);
     border-radius: 16px;
     padding: 20px;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.15);
+    box-shadow: 0 12px 48px rgba(0,0,0,0.25);
     max-width: 280px;
     z-index: 999;
     font-family: 'Segoe UI', sans-serif;
@@ -367,7 +367,7 @@ html, body, #map {
     font-size: 1.2rem;
     font-weight: 700;
     text-align: center;
-    border-bottom: 2px solid rgba(33, 150, 243, 0.1);
+    border-bottom: 2px solid rgba(25, 118, 210, 0.2);
     padding-bottom: 8px;
 }
 
