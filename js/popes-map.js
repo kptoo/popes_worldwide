@@ -87,8 +87,8 @@ async function initMap() {
                 }
             },
             layers: [
-                // Start with CartoDB dark for beautiful contrast
-                { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
+                // Start with CartoDB light for beautiful, clean look
+                { id: 'base-tiles', type: 'raster', source: 'carto_positron' }
             ],
             glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
         },
@@ -112,16 +112,38 @@ async function initMap() {
     addBasemapSwitcher();
 
     map.on('load', () => {
-        // Load custom icons
-        map.loadImage('https://churches.onrender.com/pages/popes.png', (err, img) => {
-            if (!err && !map.hasImage('pope-icon')) map.addImage('pope-icon', img);
-        });
-        map.loadImage('https://churches.onrender.com/pages/saints.png', (err, img) => {
-            if (!err && !map.hasImage('saint-icon')) map.addImage('saint-icon', img);
-        });
-        map.loadImage('https://churches.onrender.com/pages/miracles.png', (err, img) => {
-            if (!err && !map.hasImage('miracle-icon')) map.addImage('miracle-icon', img);
-        });
+        // Load custom icons from local files with error handling
+        const loadIconWithFallback = (iconPath, iconName, fallbackColor) => {
+            map.loadImage(iconPath, (err, img) => {
+                if (err) {
+                    console.error(`Failed to load ${iconPath}:`, err);
+                    // Create a simple colored circle as fallback
+                    const size = 64;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = fallbackColor;
+                    ctx.beginPath();
+                    ctx.arc(size/2, size/2, size/3, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    const imgData = ctx.getImageData(0, 0, size, size);
+                    map.addImage(iconName, imgData);
+                    console.log(`✅ ${iconName} fallback created`);
+                } else if (!map.hasImage(iconName)) {
+                    map.addImage(iconName, img);
+                    console.log(`✅ ${iconName} loaded successfully`);
+                }
+            });
+        };
+
+        loadIconWithFallback('popes.png', 'pope-icon', '#ef5350');
+        loadIconWithFallback('saints.png', 'saint-icon', '#66bb6a');
+        loadIconWithFallback('miracles.png', 'miracle-icon', '#42a5f5');
 
         // Process each category of data
         for (const [category, entries] of Object.entries(data)) {
@@ -258,7 +280,7 @@ function addBasemapSwitcher() {
         const option = document.createElement('option');
         option.value = source;
         option.textContent = name;
-        if (source === 'carto_dark') option.selected = true;
+        if (source === 'carto_positron') option.selected = true; // Light theme as default
         select.appendChild(option);
     });
 
