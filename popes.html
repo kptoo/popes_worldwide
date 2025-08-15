@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <title>Popes, Saints and Miracles</title>
+
+    <!-- MapLibre GL JS -->
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+
+    <!-- Font Awesome for Icons (like locate) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../css/app.css">
+
+    <!-- Data Loader Scripts moved to end of body -->
+</head>
+<body>
+
+    <!-- New Always-Visible Legend -->
+    <div id="legend-v2">
+        <div id="pane-header">
+            <h4>Legend</h4>
+        </div>
+
+        <div id="legend-content" class="panel-content"></div>
+            <div class="legend-item">
+                <span class="legend-circle" style="background-color: red;"></span>
+                <img src="popes.png" class="legend-image" alt="Popes" />
+                <div class="legend-text">Popes</div>
+            </div>
+
+            <div class="legend-item">
+                <span class="legend-circle" style="background-color: green;"></span>
+                <img src="saints.png" class="legend-image" alt="Saints" />
+                <div class="legend-text">Saints</div>
+            </div>
+
+            <div class="legend-item">
+                <span class="legend-circle" style="background-color: blue;"></span>
+                <img src="miracles.png" class="legend-image" alt="Miracles" />
+                <div class="legend-text">Miracles</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hamburger Icon -->
+    <div class="hamburger" onclick="toggleMenu()">
+        <div></div>
+        <div></div>
+        <div></div>
+    </div>
+
+    <!-- Menu + Search + List Container -->
+    <div class="panel-v2" id="panel-v2">
+    <!-- Menu -->
+    <div class="menu">
+        <ul >
+        <li onclick="selectCategory('popes')">Popes</li>
+        <li onclick="selectCategory('saints')">Saints</li>
+        <li onclick="selectCategory('miracles')">Miracles</li>
+        </ul>
+    </div>
+
+    <!-- Search -->
+    <input type="text" id="searchBox" placeholder="Search..." oninput="filterQuest()" />
+
+    <!-- List -->
+    <ul id="dataList"></ul>
+
+        <!-- Pagination -->
+        <div id="paginationContainer" style="display: none;">
+            <button onclick="prevPage()">Prev</button>
+                <span id="pageInfo">Page 1</span>
+            <button onclick="nextPage()">Next</button>
+        </div>
+
+
+    </div>
+
+    <!-- Map div -->
+    <div id="map"></div>
+
+    <!-- Top-Center Button -->
+    <!--  <div class="peeking-button-container">
+      <a href="https://churches.onrender.com/" class="peeking-button">Explore Catholic Churches</a>
+    </div> -->
+
+    
+
+
+    <!-- Load required JavaScript files -->
+    <script src="../js/popes-map.js"></script>
+
