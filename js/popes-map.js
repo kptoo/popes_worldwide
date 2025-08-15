@@ -11,33 +11,84 @@ const categoryLayers = {}; // store layer IDs by category for toggling
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', function() {
-    // Load custom icons
-
-
     initMap();
-
 });
 
 //----------------------------------------------------------------------------------------------------------------------
 async function initMap() {
-    const response = await fetch('https://churches.onrender.com/api/church-data');
+    const response = await fetch('/api/church-data');
     const data = await response.json();
-    const mapboxAccessToken = 'pk.eyJ1IjoiYWtpcGtlbWJvaTEiLCJhIjoiY205c3cxcmlyMDUyMTJqc2J2czR6bHowayJ9.wvD7qePsNeWZ-S0ShIsKEg';
+    
     map = new maplibregl.Map({
         container: 'map',
         style: {
             version: 8,
             sources: {
-                osm: {
+                // OpenStreetMap - Always reliable, good coverage
+                osm_standard: {
                     type: 'raster',
                     tiles: [
-                        `https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/{z}/{x}/{y}?access_token=${mapboxAccessToken}`
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
                     ],
-                    tileSize: 256
+                    tileSize: 256,
+                    attribution: '© OpenStreetMap contributors',
+                    minzoom: 0,
+                    maxzoom: 19
+                },
+                // CartoDB Positron (light, clean)
+                carto_positron: {
+                    type: 'raster',
+                    tiles: [
+                        'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                        'https://cartodb-basemaps-b.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                        'https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: '© CARTO © OpenStreetMap contributors',
+                    minzoom: 0,
+                    maxzoom: 18
+                },
+                // CartoDB Dark Matter (dark theme)
+                carto_dark: {
+                    type: 'raster',
+                    tiles: [
+                        'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                        'https://cartodb-basemaps-b.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                        'https://cartodb-basemaps-c.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: '© CARTO © OpenStreetMap contributors',
+                    minzoom: 0,
+                    maxzoom: 18
+                },
+                // Wikimedia - Very reliable alternative
+                wikimedia: {
+                    type: 'raster',
+                    tiles: [
+                        'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: '© OpenStreetMap contributors, Wikimedia maps',
+                    minzoom: 0,
+                    maxzoom: 18
+                },
+                // Stamen Terrain for beautiful topographic view
+                stamen_terrain: {
+                    type: 'raster',
+                    tiles: [
+                        'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
+                        'https://stamen-tiles.b.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
+                        'https://stamen-tiles.c.ssl.fastly.net/terrain/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors',
+                    minzoom: 0,
+                    maxzoom: 18
                 }
             },
             layers: [
-                { id: 'osm-tiles', type: 'raster', source: 'osm' }
+                // Start with CartoDB dark for beautiful contrast
+                { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
             ],
             glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
         },
@@ -46,27 +97,33 @@ async function initMap() {
         worldCopyJump: true
     });
 
+    // Add navigation controls
     map.addControl(new maplibregl.NavigationControl(), 'top-left');
-                        const geolocateControl = new maplibregl.GeolocateControl({
-                positionOptions: { enableHighAccuracy: true },
-                trackUserLocation: true,
-                showUserHeading: true
-            });
+    
+    // Add geolocation control
+    const geolocateControl = new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserHeading: true
+    });
     map.addControl(geolocateControl, 'top-left');
 
-    map.on('load', () => {
+    // Add basemap switcher control
+    addBasemapSwitcher();
 
+    map.on('load', () => {
         // Load custom icons
-        map.loadImage('popes.png', (err, img) => {
+        map.loadImage('https://churches.onrender.com/pages/popes.png', (err, img) => {
             if (!err && !map.hasImage('pope-icon')) map.addImage('pope-icon', img);
         });
-        map.loadImage('saints.png', (err, img) => {
+        map.loadImage('https://churches.onrender.com/pages/saints.png', (err, img) => {
             if (!err && !map.hasImage('saint-icon')) map.addImage('saint-icon', img);
         });
-        map.loadImage('miracles.png', (err, img) => {
+        map.loadImage('https://churches.onrender.com/pages/miracles.png', (err, img) => {
             if (!err && !map.hasImage('miracle-icon')) map.addImage('miracle-icon', img);
         });
 
+        // Process each category of data
         for (const [category, entries] of Object.entries(data)) {
             const geojson = {
                 type: 'FeatureCollection',
@@ -87,11 +144,11 @@ async function initMap() {
             const unclusteredLayerId = `${category}-points`;
 
             // Store the relevant layer IDs for toggling later
-			categoryLayers[category] = [
-				clusterLayerId,
-				countLayerId,
-				unclusteredLayerId
-			];
+            categoryLayers[category] = [
+                clusterLayerId,
+                countLayerId,
+                unclusteredLayerId
+            ];
 
             map.addSource(sourceId, {
                 type: 'geojson',
@@ -110,8 +167,10 @@ async function initMap() {
                     'circle-color': getClusterColor(category),
                     'circle-radius': [
                         'step', ['get', 'point_count'],
-                        10, 10, 12, 30, 14, 100, 16
-                    ]
+                        15, 10, 20, 30, 25, 100, 30
+                    ],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
                 }
             });
 
@@ -123,7 +182,10 @@ async function initMap() {
                 layout: {
                     'text-field': '{point_count_abbreviated}',
                     'text-font': ['Noto Sans Regular'],
-                    'text-size': 12
+                    'text-size': 14
+                },
+                paint: {
+                    'text-color': '#ffffff'
                 }
             });
 
@@ -134,7 +196,7 @@ async function initMap() {
                 filter: ['!', ['has', 'point_count']],
                 layout: {
                     'icon-image': getCategoryIcon(category),
-                    'icon-size': 0.07,
+                    'icon-size': 0.08,
                     'icon-allow-overlap': false,
                     'icon-anchor': 'bottom'
                 }
@@ -153,53 +215,97 @@ async function initMap() {
 
             map.on('mouseenter', clusterLayerId, () => map.getCanvas().style.cursor = 'pointer');
             map.on('mouseleave', clusterLayerId, () => map.getCanvas().style.cursor = '');
+            map.on('mouseenter', unclusteredLayerId, () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseleave', unclusteredLayerId, () => map.getCanvas().style.cursor = '');
         }
+        
+        // Initialize toggle states
         document.getElementById('toggle-popes').checked = true;
         document.getElementById('toggle-saints').checked = true;
         document.getElementById('toggle-miracles').checked = true;
         document.getElementById('legend-v2').style.display = 'block';
     });
+}
 
+// Add basemap switcher
+function addBasemapSwitcher() {
+    const basemaps = {
+        'Dark': 'carto_dark',
+        'Light': 'carto_positron', 
+        'Street': 'osm_standard',
+        'Terrain': 'stamen_terrain',
+        'Wiki': 'wikimedia'
+    };
+
+    const switcher = document.createElement('div');
+    switcher.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    switcher.style.cssText = `
+        background: white;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    `;
+
+    const select = document.createElement('select');
+    select.style.cssText = `
+        border: none;
+        background: transparent;
+        padding: 5px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+
+    Object.entries(basemaps).forEach(([name, source]) => {
+        const option = document.createElement('option');
+        option.value = source;
+        option.textContent = name;
+        if (source === 'carto_dark') option.selected = true;
+        select.appendChild(option);
+    });
+
+    select.addEventListener('change', (e) => {
+        map.getLayer('base-tiles') && map.removeLayer('base-tiles');
+        map.addLayer({ id: 'base-tiles', type: 'raster', source: e.target.value }, 'background');
+    });
+
+    switcher.appendChild(select);
+    map.addControl({ onAdd: () => switcher, onRemove: () => {} }, 'top-right');
 }
 
 //------------------------------------------------------------------------------------------------------
-
 function getClusterColor(category) {
-            switch (category) {
-    case 'popes': // 🔴 Shades of red
-        return ['step', ['get', 'point_count'],
-            '#ffebee', 10,  // lightest red
-            '#ef9a9a', 30,  // medium red
-            '#e57373', 100, // darker red
-            '#c62828'       // darkest red
-        ];
-    case 'saints': // 🟢 Shades of green
-        return ['step', ['get', 'point_count'],
-            '#e8f5e9', 10,  // lightest green
-            '#a5d6a7', 30,  // medium green
-            '#66bb6a', 100, // darker green
-            '#2e7d32'       // darkest green
-        ];
-    case 'miracles': // 🔵 Shades of blue
-        return ['step', ['get', 'point_count'],
-            '#e3f2fd', 10,  // lightest blue
-            '#90caf9', 30,  // medium blue
-            '#42a5f5', 100, // darker blue
-            '#1565c0'       // darkest blue
-        ];
-    default: // fallback grey
-        return ['step', ['get', 'point_count'],
-            '#eeeeee', 10,
-            '#bdbdbd', 30,
-            '#9e9e9e', 100,
-            '#616161'
-        ];
-}
-
+    switch (category) {
+        case 'popes': // 🔴 Shades of red
+            return ['step', ['get', 'point_count'],
+                '#ffcdd2', 10,  // lightest red
+                '#ef5350', 30,  // medium red
+                '#e53935', 100, // darker red
+                '#c62828'       // darkest red
+            ];
+        case 'saints': // 🟢 Shades of green
+            return ['step', ['get', 'point_count'],
+                '#c8e6c9', 10,  // lightest green
+                '#66bb6a', 30,  // medium green
+                '#4caf50', 100, // darker green
+                '#2e7d32'       // darkest green
+            ];
+        case 'miracles': // 🔵 Shades of blue
+            return ['step', ['get', 'point_count'],
+                '#bbdefb', 10,  // lightest blue
+                '#42a5f5', 30,  // medium blue
+                '#2196f3', 100, // darker blue
+                '#1565c0'       // darkest blue
+            ];
+        default: // fallback grey
+            return ['step', ['get', 'point_count'],
+                '#eeeeee', 10,
+                '#bdbdbd', 30,
+                '#9e9e9e', 100,
+                '#616161'
+            ];
+    }
 }
 
 //----------------------------------------------------------------------------------------------------
-
 function getCategoryIcon(category) {
     switch (category) {
         case 'popes': return 'pope-icon';
@@ -215,172 +321,143 @@ function showPopupForCategory(category, e) {
 
     let html = '';
     
-if (category === 'popes') {
-    const source = map.getSource(`${category}-source`);
-    const allPopes = source._data.features;
+    if (category === 'popes') {
+        const source = map.getSource(`${category}-source`);
+        const allPopes = source._data.features;
 
-    const sameLocationPopes = allPopes.filter(f =>
-        Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
-        Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
-    );
+        const sameLocationPopes = allPopes.filter(f =>
+            Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
+            Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
+        );
 
-    let html = '';
+        if (sameLocationPopes.length === 0 || sameLocationPopes.length === 1) {
+            function formatDate(value) {
+                const date = new Date(value);
+                return isNaN(date.getTime()) ? value : date.toDateString();
+            }
+            
+            html = `
+                <div class="pope-card">
+                    <div class="pope-card-header">${props['Papal Name']}</div>
+                    <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
+                    <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
+                    <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
+                    <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                    <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
+                    <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
+                    <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
+                    <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
+                    <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
+                    <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
+                    <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
+                    <div><strong>Length:</strong> ${props['Length'] || ''}</div>
+                    <div><strong>Century:</strong> ${props['Century'] || ''}</div>
+                </div>
+            `;
+        } else {
+            html = `
+                <div class="carousel-container">
+                    <div id="pope-carousel-content" class="pope-card"></div>
+                    <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
+                        <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
+                        <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
+                        <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
+                    </div>
+                </div>
+            `;
 
-    if (sameLocationPopes.length === 0 || sameLocationPopes.length === 1) {
-        //console.log('Zero',sameLocationPopes);
+            window.popeCarouselData = {
+                index: 0,
+                popes: sameLocationPopes
+            };
+        }
+
+        new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
+
+        if (sameLocationPopes.length > 1) {
+            updatePopeCarousel(category);
+        }
+        return;
+    }
+    else if (category === 'saints') {
+        const source = map.getSource(`${category}-source`);
+        const allSaints = source._data.features;
+
+        const sameLocationSaints = allSaints.filter(f =>
+            Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
+            Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
+        );
+        
+        const feastDateFormatted = props['Feast'] ? (() => {
+            const [month, day] = props['Feast'].toString().split('.').map(Number);
+            if (!month || !day) return '';
+            const date = new Date(1970, month - 1, day);
+            return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
+        })() : '';
 
         function formatDate(value) {
             const date = new Date(value);
             return isNaN(date.getTime()) ? value : date.toDateString();
         }
-        
-        html = `
-            <div class="pope-card">
-                <div class="pope-card-header">${props['Papal Name']}</div>
-                <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
-                <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
-                <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
-                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-                <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
-                <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
-                <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
-                <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
-                <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
-                <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
-                <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
-                <div><strong>Length:</strong> ${props['Length'] || ''}</div>
-                <div><strong>Century:</strong> ${props['Century'] || ''}</div>
-            </div>
-        `;
-    } else {
-        //console.log('More',sameLocationPopes);
-        html = `
-            <div class="carousel-container">
-                <div id="pope-carousel-content" class="pope-card"></div>
-                <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
-                    <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
-                    <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
-                    <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
-                </div>
-            </div>
-        `;
-
-        window.popeCarouselData = {
-            index: 0,
-            popes: sameLocationPopes
-        };
-    }
-
-    new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
-
-    if (sameLocationPopes.length > 1) {
-        updatePopeCarousel(category);
-    }
-    return; // ✅ Prevents a second popup from being added
-}
-
- else if (category === 'saints') {
-    const source = map.getSource(`${category}-source`);
-    const allSaints = source._data.features;
-
-    const sameLocationSaints = allSaints.filter(f =>
-        Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
-        Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
-    );
-	 const feastDateFormatted = props['Feast'] ? (() => {
-	  const [month, day] = props['Feast'].toString().split('.').map(Number);
-	  if (!month || !day) return '';
-	  const date = new Date(1970, month - 1, day); // Month is 0-based
-	  return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
-	})() : '';
-
-	 function formatDate(value) {
-	    const date = new Date(value);
-	    return isNaN(date.getTime()) ? value : date.toDateString();
-	}
-
-    let html = '';
 
         if (sameLocationSaints.length === 0 || sameLocationSaints.length === 1) {
-            //console.log('Zero',sameLocationSaints);
-		html = `
-		  <div class="pope-card">
-		    <div class="pope-card-header"> ${fE(props.Name)} </div>
-		    <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
-		    <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
-		    <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-		    <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
-		    <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
-		    <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted)}</div>
-		    <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
-		    <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
-		    <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
-		    <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
-		  </div>
-		`;
-
-
-    } else {
-        //console.log('More',sameLocationSaints);
-        html = `
-            <div class="carousel-container">
-                <div id="pope-carousel-content" class="pope-card"></div>
-                <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
-                    <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
-                    <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
-                    <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
+            html = `
+              <div class="pope-card">
+                <div class="pope-card-header"> ${fE(props.Name)} </div>
+                <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
+                <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
+                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
+                <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
+                <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted)}</div>
+                <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
+                <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
+                <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
+                <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
+              </div>
+            `;
+        } else {
+            html = `
+                <div class="carousel-container">
+                    <div id="pope-carousel-content" class="pope-card"></div>
+                    <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
+                        <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
+                        <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
+                        <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
 
-        window.popeCarouselData = {
-            index: 0,
-            popes: sameLocationSaints
-        };
-    }
+            window.popeCarouselData = {
+                index: 0,
+                popes: sameLocationSaints
+            };
+        }
 
         new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
 
         if (sameLocationSaints.length > 1) {
-        updatePopeCarousel(category);
-    }
-      return; // ✅ Prevents a second popup from being added
-
-
-
-    } else if (category === 'miracles') {
-            html = `
-            <div class="pope-card">
-                <div class="pope-card-header">
-                    Miracle Summary
-                </div>
-                <div><strong>Miracle:</strong> ${props.Summary || ''}</div>
-                <div><strong>Location:</strong> ${props.Location || ''}</div>
-                <div><strong>Date:</strong> ${props.Date ? new Date(props.Date).toDateString() : ''}</div>
-                <div><strong>Details:</strong> ${props['Additional Details'] || ''}</div>
-                <div><strong>Summaries:</strong> ${props['Summaries'] || ''}</div>
+            updatePopeCarousel(category);
+        }
+        return;
+    } 
+    else if (category === 'miracles') {
+        html = `
+        <div class="pope-card">
+            <div class="pope-card-header">
+                Miracle Summary
             </div>
-            `;
-
+            <div><strong>Miracle:</strong> ${props.Summary || ''}</div>
+            <div><strong>Location:</strong> ${props.Location || ''}</div>
+            <div><strong>Date:</strong> ${props.Date ? new Date(props.Date).toDateString() : ''}</div>
+            <div><strong>Details:</strong> ${props['Additional Details'] || ''}</div>
+            <div><strong>Summaries:</strong> ${props['Summaries'] || ''}</div>
+        </div>
+        `;
     }
 
     new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
 }
-
-//------------------------------------------------------------------------------------------------------------------
-
-function handleClusterClick(e) {
-        if (!e.features || !e.features.length) return;
-        const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
-        if (!features.length) return; // Exit if no cluster feature found
-
-        // Zoom in on cluster click (removed getClusterExpansionZoom)
-        map.easeTo({
-            center: features[0].geometry.coordinates,
-            zoom: map.getZoom() + 2 // Zoom in by 2 levels
-        });
-}
-
 
 //-----------------------------------------------------------------------------------------------------//
 let CSVall = {};
@@ -396,39 +473,28 @@ fetchData();
 function toggleMenu() {
     const panel = document.getElementById('panel-v2');
     panel.classList.toggle('show');
-
-    // Clear list and search when closing
-    //if (!panel.classList.contains('show')) {
-    //document.getElementById('dataList').innerHTML = '';
-    //document.getElementById('searchBox').value = '';
-    //currentList = [];
-    //}
 }
-let currentCategory = ''; // default
+
+let currentCategory = '';
 
 function selectCategory(category) {
-    currentCategory  = category;
+    currentCategory = category;
     const query = document.getElementById('searchBox').value.toLowerCase();
     const listContainer = document.getElementById('dataList');
     listContainer.innerHTML = '';
 
     const paginationEl = document.getElementById('paginationContainer');
 
-    // Update the search box placeholder
     const searchBox = document.getElementById('searchBox');
     searchBox.placeholder = `Search ${capitalize(category)}...`;
 
     if (category === 'saints') {
-        saintSearch = { name: '', country: '', page: 1 }; // reset
+        saintSearch = { name: '', country: '', page: 1 };
         fetchSaints();
-      
-        paginationEl.style.display = 'block'; // 👈 Show pagination
+        paginationEl.style.display = 'block';
     } else {
-        // Use local data for popes/miracles since not paginated
-        //currentList = CSVall[category] || [];
         filterList(category);
-       
-        paginationEl.style.display = 'none'; // 👈 Show pagination
+        paginationEl.style.display = 'none';
     }
 }
 
@@ -438,11 +504,9 @@ function filterQuest(){
     } else {
         filterList(currentCategory);
     }
-
 }
 
 function filterList(category) {
-
     const query = document.getElementById('searchBox').value.toLowerCase();
     const listContainer = document.getElementById('dataList');
     listContainer.innerHTML = '';
@@ -485,7 +549,7 @@ function filterList(category) {
             listContainer.appendChild(li);
         });
 
-    } else if (currentCategory === "miracles") { // Corrected condition
+    } else if (currentCategory === "miracles") {
         currentList
           .filter(item =>
                 (item.Summary && item.Summary.toLowerCase().includes(query)) ||
@@ -517,23 +581,19 @@ function filterList(category) {
             listContainer.appendChild(li);
         });
 
-    } else if (currentCategory === "saints") { // Add condition for saints
-       
-        fetchSaints(); // Call fetchSaints for saints category
+    } else if (currentCategory === "saints") {
+        fetchSaints();
     } else {
         console.log("Category not handled in filterList:", category);
     }
-
 }
 
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-
 //-------------------------------------------------------------------------------------------------
 //Saint -Search
-
 let saintSearch = {
   name: '',
   page: 1
@@ -564,7 +624,7 @@ function displaySaints(saints) {
             <div class="church-title">${saint["Name"] || ""}</div>
             <div class="church-details">
                 <strong>Country:</strong> ${saint["Country"] || ""} <br>
-		<strong>Bio:</strong> ${saint["Bio"] || ""} 
+                <strong>Bio:</strong> ${saint["Bio"] || ""} 
             </div>
         `;
 
@@ -607,24 +667,22 @@ document.getElementById('searchBox').addEventListener('input', (e) => {
   saintSearch.country = e.target.value;
   saintSearch.born = e.target.value;
   saintSearch.page = 1;
-  filterQuest(); // Call filterQuest instead of fetchSaints directly
+  filterQuest();
 });
 
-
-//
-
+// Toggle category visibility
 function toggleCategory(category, visible) {
-	if (!categoryLayers[category]) return;
+    if (!categoryLayers[category]) return;
 
-	for (const layerId of categoryLayers[category]) {
-		if (map.getLayer(layerId)) {
-			if (visible) {
-				map.setLayoutProperty(layerId, 'visibility', 'visible');
-			} else {
-				map.setLayoutProperty(layerId, 'visibility', 'none');
-			}
-		}
-	}
+    for (const layerId of categoryLayers[category]) {
+        if (map.getLayer(layerId)) {
+            if (visible) {
+                map.setLayoutProperty(layerId, 'visibility', 'visible');
+            } else {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+        }
+    }
 }
 
 document.getElementById('toggle-popes').addEventListener('change', function(e) {
@@ -636,6 +694,7 @@ document.getElementById('toggle-saints').addEventListener('change', function(e) 
 document.getElementById('toggle-miracles').addEventListener('change', function(e) {
     toggleCategory('miracles', e.target.checked);
 });
+
 function updatePopeCarousel(x) {
     const container = document.getElementById('pope-carousel-content');
     const data = window.popeCarouselData;
@@ -644,71 +703,64 @@ function updatePopeCarousel(x) {
     const props = data.popes[data.index].properties;
 
     if (x==="popes"){
+        function formatDate(value) {
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? value : date.toDateString();
+        }
 
-function formatDate(value) {
-    const date = new Date(value);
-    return isNaN(date.getTime()) ? value : date.toDateString();
-}
+        container.innerHTML  = `
+            <div class="pope-card" style="height: 370px; overflow-y: auto;">
+                <div class="pope-card-header">${props['Papal Name']}</div>
+                <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
+                <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
+                <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
+                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
+                <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
+                <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
+                <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
+                <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
+                <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
+                <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
+                <div><strong>Length:</strong> ${props['Length'] || ''}</div>
+                <div><strong>Century:</strong> ${props['Century'] || ''}</div>
+            </div>
+        `;
+    } else {
+        const feastDateFormatted1 = props['Feast'] ? (() => {
+            const [month, day] = props['Feast'].toString().split('.').map(Number);
+            if (!month || !day) return '';
+            const date = new Date(1970, month - 1, day);
+            return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
+        })() : '';
 
-container.innerHTML  = `
-    <div class="pope-card" class="pope-card" style="height: 370px; overflow-y: auto;">
-        <div class="pope-card-header">${props['Papal Name']}</div>
-        <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
-        <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
-        <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
-        <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-        <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
-        <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
-        <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
-        <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
-        <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
-        <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
-        <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
-        <div><strong>Length:</strong> ${props['Length'] || ''}</div>
-        <div><strong>Century:</strong> ${props['Century'] || ''}</div>
-    </div>
-`;
+        function formatDate(value) {
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? value : date.toDateString();
+        }
+        
+        container.innerHTML = `
+              <div class="pope-card" style="height: 370px; overflow-y: auto;">
+                <div class="pope-card-header"> ${fE(props.Name)} </div>
+                <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
+                <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
+                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
+                <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
+                <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted1)}</div>
+                <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
+                <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
+                <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
+                <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
+              </div>
+            `;
+    }
 
-} else {
-	const feastDateFormatted1 = props['Feast'] ? (() => {
-	  const [month, day] = props['Feast'].toString().split('.').map(Number);
-	  if (!month || !day) return '';
-	  const date = new Date(1970, month - 1, day); // Month is 0-based
-	  return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
-	})() : '';
-
-	    function formatDate(value) {
-		    const date = new Date(value);
-		    return isNaN(date.getTime()) ? value : date.toDateString();
-		}
-
-	    
-    container.innerHTML = `
-		  <div class="pope-card" class="pope-card" style="height: 370px; overflow-y: auto;">
-		    <div class="pope-card-header"> ${fE(props.Name)} </div>
-		    <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
-		    <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
-		    <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-		    <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
-		    <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
-		    <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted1)}</div>
-		    <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
-		    <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
-		    <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
-		    <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
-		  </div>
-		`;
-
-}
-
-    // 🟨 Add this to update the counter display
     const counter = document.getElementById('carousel-counter');
     counter.textContent = `${data.index + 1} of ${data.popes.length}`;
 }
 
-
 function prevPope(x) {
-
     if (!window.popeCarouselData) return;
     window.popeCarouselData.index =
         (window.popeCarouselData.index - 1 + window.popeCarouselData.popes.length) %
@@ -724,12 +776,10 @@ function nextPope(x) {
     updatePopeCarousel(x);
 }
 
-
 //-------------------------------------------------------------------------------------------------------------------
 function fE(str) {     //Fix encoding
   try {
     const fixed = decodeURIComponent(escape(str));
-    // If the result loses non-ASCII characters, keep original
     if (/[\u0080-\uFFFF]/.test(str) && !/[\u0080-\uFFFF]/.test(fixed)) {
       return str;
     }
@@ -738,4 +788,3 @@ function fE(str) {     //Fix encoding
     return str;
   }
 }
-
