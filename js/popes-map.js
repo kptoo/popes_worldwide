@@ -112,7 +112,7 @@ async function initMap() {
     addBasemapSwitcher();
 
     map.on('load', () => {
-        // Load your actual PNG icons
+        // Load your actual PNG icons with correct paths
         const loadIcon = (iconPath, iconName) => {
             map.loadImage(iconPath, (err, img) => {
                 if (err) {
@@ -148,7 +148,7 @@ async function initMap() {
             });
         };
 
-        // Load your actual PNG files
+        // Load your actual PNG files with correct paths (root directory)
         loadIcon('popes.png', 'pope-icon');
         loadIcon('saints.png', 'saint-icon');
         loadIcon('miracles.png', 'miracle-icon');
@@ -184,8 +184,8 @@ async function initMap() {
                 type: 'geojson',
                 data: geojson,
                 cluster: true,
-                clusterMaxZoom: 18, // Increased to allow more cluster expansion
-                clusterRadius: 40 // Reduced radius for better clustering
+                clusterMaxZoom: 16, // Fixed - was causing issues at 18
+                clusterRadius: 50 // Back to original size
             });
 
             map.addLayer({
@@ -197,9 +197,9 @@ async function initMap() {
                     'circle-color': getClusterColor(category),
                     'circle-radius': [
                         'step', ['get', 'point_count'],
-                        20, 10, 25, 30, 30, 100, 35
+                        10, 10, 12, 30, 14, 100, 16  // Back to original sizes
                     ],
-                    'circle-stroke-width': 3,
+                    'circle-stroke-width': 2,
                     'circle-stroke-color': '#ffffff',
                     'circle-opacity': 0.9
                 }
@@ -213,7 +213,7 @@ async function initMap() {
                 layout: {
                     'text-field': '{point_count_abbreviated}',
                     'text-font': ['Noto Sans Regular'],
-                    'text-size': 16
+                    'text-size': 12  // Back to original size
                 },
                 paint: {
                     'text-color': '#ffffff',
@@ -229,16 +229,19 @@ async function initMap() {
                 filter: ['!', ['has', 'point_count']],
                 layout: {
                     'icon-image': getCategoryIcon(category),
-                    'icon-size': 0.15, // Larger individual icons
-                    'icon-allow-overlap': true, // Allow overlap to ensure visibility
+                    'icon-size': 0.07, // Back to original size
+                    'icon-allow-overlap': false,
                     'icon-anchor': 'bottom'
                 }
             });
 
             map.on('click', unclusteredLayerId, e => showPopupForCategory(category, e));
 
+            // Fixed cluster click handler
             map.on('click', clusterLayerId, e => {
-                console.log('🔍 Cluster clicked!', e);
+                e.preventDefault();
+                console.log('🔍 Cluster clicked for category:', category);
+                
                 const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
                 if (!features.length) {
                     console.log('❌ No cluster features found');
@@ -247,7 +250,6 @@ async function initMap() {
                 
                 const clusterId = features[0].properties.cluster_id;
                 const pointCount = features[0].properties.point_count;
-                const source = map.getSource(sourceId);
                 const currentZoom = map.getZoom();
                 
                 console.log(`📍 Cluster details:
@@ -256,53 +258,47 @@ async function initMap() {
                     - Source: ${sourceId}
                     - Current zoom: ${currentZoom}`);
                 
-                // Get cluster expansion zoom
+                const source = map.getSource(sourceId);
+                
                 source.getClusterExpansionZoom(clusterId, (err, zoom) => {
                     if (err) {
-                        console.log('❌ Error getting cluster expansion zoom:', err);
-                        // Aggressive fallback: zoom in significantly
-                        const newZoom = Math.min(currentZoom + 4, 20);
-                        console.log(`🎯 Fallback zoom from ${currentZoom} to ${newZoom}`);
-                        map.easeTo({ 
+                        console.log('❌ Error getting expansion zoom:', err);
+                        const newZoom = Math.min(currentZoom + 3, 20);
+                        console.log(`🚀 Fallback zoom to: ${newZoom}`);
+                        
+                        map.flyTo({ 
                             center: features[0].geometry.coordinates, 
                             zoom: newZoom,
-                            duration: 800
+                            duration: 1000
                         });
                         return;
                     }
                     
-                    // Ensure we zoom in enough to break clusters
-                    const targetZoom = Math.max(zoom + 1, currentZoom + 2); // Force significant zoom
+                    const targetZoom = Math.max(zoom, currentZoom + 1);
                     const finalZoom = Math.min(targetZoom, 20);
                     
-                    console.log(`🎯 Zoom calculation:
-                        - Expansion zoom: ${zoom}
-                        - Target zoom: ${targetZoom} 
-                        - Final zoom: ${finalZoom}`);
+                    console.log(`🎯 Zooming from ${currentZoom} to ${finalZoom}`);
                     
-                    if (finalZoom <= currentZoom + 0.5) {
-                        // If we're not zooming enough, force a bigger jump
-                        const forceZoom = Math.min(currentZoom + 3, 20);
-                        console.log(`🚀 Forcing bigger zoom to: ${forceZoom}`);
-                        map.easeTo({ 
-                            center: features[0].geometry.coordinates, 
-                            zoom: forceZoom,
-                            duration: 800
-                        });
-                    } else {
-                        map.easeTo({ 
-                            center: features[0].geometry.coordinates, 
-                            zoom: finalZoom,
-                            duration: 800
-                        });
-                    }
+                    map.flyTo({ 
+                        center: features[0].geometry.coordinates, 
+                        zoom: finalZoom,
+                        duration: 1000
+                    });
                 });
             });
 
-            map.on('mouseenter', clusterLayerId, () => map.getCanvas().style.cursor = 'pointer');
-            map.on('mouseleave', clusterLayerId, () => map.getCanvas().style.cursor = '');
-            map.on('mouseenter', unclusteredLayerId, () => map.getCanvas().style.cursor = 'pointer');
-            map.on('mouseleave', unclusteredLayerId, () => map.getCanvas().style.cursor = '');
+            map.on('mouseenter', clusterLayerId, () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', clusterLayerId, () => {
+                map.getCanvas().style.cursor = '';
+            });
+            map.on('mouseenter', unclusteredLayerId, () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', unclusteredLayerId, () => {
+                map.getCanvas().style.cursor = '';
+            });
         }
         
         // Initialize toggle states
