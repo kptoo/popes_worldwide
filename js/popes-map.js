@@ -112,59 +112,46 @@ async function initMap() {
     addBasemapSwitcher();
 
     map.on('load', () => {
-        // Create fallback icons immediately, then try to load custom ones
-        const createFallbackIcon = (iconName, color, symbol) => {
-            const size = 64;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            
-            // Draw circle background
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/2 - 4, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Draw white border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            
-            // Draw symbol
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(symbol, size/2, size/2);
-            
-            const imgData = ctx.getImageData(0, 0, size, size);
-            map.addImage(iconName, imgData);
-            console.log(`✅ ${iconName} fallback created with symbol: ${symbol}`);
-        };
-
-        // Create fallback icons immediately
-        createFallbackIcon('pope-icon', '#ef5350', '♛');
-        createFallbackIcon('saint-icon', '#66bb6a', '✝');
-        createFallbackIcon('miracle-icon', '#42a5f5', '★');
-
-        // Try to load actual PNG icons and replace fallbacks if successful
-        const tryLoadIcon = (iconPath, iconName) => {
+        // Load your actual PNG icons
+        const loadIcon = (iconPath, iconName) => {
             map.loadImage(iconPath, (err, img) => {
-                if (!err) {
-                    map.removeImage(iconName); // Remove fallback
+                if (err) {
+                    console.error(`Failed to load ${iconPath}:`, err);
+                    // Create a simple fallback only if needed
+                    const size = 64;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const colors = {
+                        'pope-icon': '#ef5350',
+                        'saint-icon': '#66bb6a', 
+                        'miracle-icon': '#42a5f5'
+                    };
+                    
+                    ctx.fillStyle = colors[iconName] || '#666666';
+                    ctx.beginPath();
+                    ctx.arc(size/2, size/2, size/2 - 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    
+                    const imgData = ctx.getImageData(0, 0, size, size);
+                    map.addImage(iconName, imgData);
+                    console.log(`⚠️ Using fallback for ${iconName}`);
+                } else {
                     map.addImage(iconName, img);
                     console.log(`✅ ${iconName} loaded from ${iconPath}`);
-                } else {
-                    console.log(`ℹ️ Using fallback for ${iconName}, could not load ${iconPath}`);
                 }
             });
         };
 
-        // Try multiple possible paths for the icons
-        tryLoadIcon('popes.png', 'pope-icon');
-        tryLoadIcon('saints.png', 'saint-icon');
-        tryLoadIcon('miracles.png', 'miracle-icon');
+        // Load your actual PNG files
+        loadIcon('popes.png', 'pope-icon');
+        loadIcon('saints.png', 'saint-icon');
+        loadIcon('miracles.png', 'miracle-icon');
 
         // Process each category of data
         for (const [category, entries] of Object.entries(data)) {
@@ -197,8 +184,8 @@ async function initMap() {
                 type: 'geojson',
                 data: geojson,
                 cluster: true,
-                clusterMaxZoom: 14,
-                clusterRadius: 50
+                clusterMaxZoom: 18, // Increased to allow more cluster expansion
+                clusterRadius: 40 // Reduced radius for better clustering
             });
 
             map.addLayer({
@@ -242,8 +229,8 @@ async function initMap() {
                 filter: ['!', ['has', 'point_count']],
                 layout: {
                     'icon-image': getCategoryIcon(category),
-                    'icon-size': 0.12,
-                    'icon-allow-overlap': false,
+                    'icon-size': 0.15, // Larger individual icons
+                    'icon-allow-overlap': true, // Allow overlap to ensure visibility
                     'icon-anchor': 'bottom'
                 }
             });
@@ -251,35 +238,64 @@ async function initMap() {
             map.on('click', unclusteredLayerId, e => showPopupForCategory(category, e));
 
             map.on('click', clusterLayerId, e => {
-                console.log('Cluster clicked!', e);
+                console.log('🔍 Cluster clicked!', e);
                 const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
                 if (!features.length) {
-                    console.log('No cluster features found');
+                    console.log('❌ No cluster features found');
                     return;
                 }
                 
                 const clusterId = features[0].properties.cluster_id;
+                const pointCount = features[0].properties.point_count;
                 const source = map.getSource(sourceId);
+                const currentZoom = map.getZoom();
                 
-                console.log('Cluster ID:', clusterId, 'Source:', sourceId);
+                console.log(`📍 Cluster details:
+                    - ID: ${clusterId}
+                    - Point count: ${pointCount}
+                    - Source: ${sourceId}
+                    - Current zoom: ${currentZoom}`);
                 
                 // Get cluster expansion zoom
                 source.getClusterExpansionZoom(clusterId, (err, zoom) => {
                     if (err) {
-                        console.log('Error getting cluster expansion zoom:', err);
-                        // Fallback: just zoom in by 2 levels
+                        console.log('❌ Error getting cluster expansion zoom:', err);
+                        // Aggressive fallback: zoom in significantly
+                        const newZoom = Math.min(currentZoom + 4, 20);
+                        console.log(`🎯 Fallback zoom from ${currentZoom} to ${newZoom}`);
                         map.easeTo({ 
                             center: features[0].geometry.coordinates, 
-                            zoom: Math.min(map.getZoom() + 2, 18)
+                            zoom: newZoom,
+                            duration: 800
                         });
                         return;
                     }
                     
-                    console.log('Zooming to level:', zoom);
-                    map.easeTo({ 
-                        center: features[0].geometry.coordinates, 
-                        zoom: Math.min(zoom, 18)
-                    });
+                    // Ensure we zoom in enough to break clusters
+                    const targetZoom = Math.max(zoom + 1, currentZoom + 2); // Force significant zoom
+                    const finalZoom = Math.min(targetZoom, 20);
+                    
+                    console.log(`🎯 Zoom calculation:
+                        - Expansion zoom: ${zoom}
+                        - Target zoom: ${targetZoom} 
+                        - Final zoom: ${finalZoom}`);
+                    
+                    if (finalZoom <= currentZoom + 0.5) {
+                        // If we're not zooming enough, force a bigger jump
+                        const forceZoom = Math.min(currentZoom + 3, 20);
+                        console.log(`🚀 Forcing bigger zoom to: ${forceZoom}`);
+                        map.easeTo({ 
+                            center: features[0].geometry.coordinates, 
+                            zoom: forceZoom,
+                            duration: 800
+                        });
+                    } else {
+                        map.easeTo({ 
+                            center: features[0].geometry.coordinates, 
+                            zoom: finalZoom,
+                            duration: 800
+                        });
+                    }
                 });
             });
 
