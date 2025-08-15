@@ -87,8 +87,8 @@ async function initMap() {
                 }
             },
             layers: [
-                // Start with CartoDB light for beautiful, clean look
-                { id: 'base-tiles', type: 'raster', source: 'carto_positron' }
+                // Start with CartoDB dark for beautiful dark blue look
+                { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
             ],
             glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
         },
@@ -112,38 +112,59 @@ async function initMap() {
     addBasemapSwitcher();
 
     map.on('load', () => {
-        // Load custom icons from local files with error handling
-        const loadIconWithFallback = (iconPath, iconName, fallbackColor) => {
+        // Create fallback icons immediately, then try to load custom ones
+        const createFallbackIcon = (iconName, color, symbol) => {
+            const size = 64;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw circle background
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 4, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw white border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            // Draw symbol
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(symbol, size/2, size/2);
+            
+            const imgData = ctx.getImageData(0, 0, size, size);
+            map.addImage(iconName, imgData);
+            console.log(`✅ ${iconName} fallback created with symbol: ${symbol}`);
+        };
+
+        // Create fallback icons immediately
+        createFallbackIcon('pope-icon', '#ef5350', '♛');
+        createFallbackIcon('saint-icon', '#66bb6a', '✝');
+        createFallbackIcon('miracle-icon', '#42a5f5', '★');
+
+        // Try to load actual PNG icons and replace fallbacks if successful
+        const tryLoadIcon = (iconPath, iconName) => {
             map.loadImage(iconPath, (err, img) => {
-                if (err) {
-                    console.error(`Failed to load ${iconPath}:`, err);
-                    // Create a simple colored circle as fallback
-                    const size = 64;
-                    const canvas = document.createElement('canvas');
-                    canvas.width = size;
-                    canvas.height = size;
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = fallbackColor;
-                    ctx.beginPath();
-                    ctx.arc(size/2, size/2, size/3, 0, 2 * Math.PI);
-                    ctx.fill();
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 3;
-                    ctx.stroke();
-                    
-                    const imgData = ctx.getImageData(0, 0, size, size);
-                    map.addImage(iconName, imgData);
-                    console.log(`✅ ${iconName} fallback created`);
-                } else if (!map.hasImage(iconName)) {
+                if (!err) {
+                    map.removeImage(iconName); // Remove fallback
                     map.addImage(iconName, img);
-                    console.log(`✅ ${iconName} loaded successfully`);
+                    console.log(`✅ ${iconName} loaded from ${iconPath}`);
+                } else {
+                    console.log(`ℹ️ Using fallback for ${iconName}, could not load ${iconPath}`);
                 }
             });
         };
 
-        loadIconWithFallback('popes.png', 'pope-icon', '#ef5350');
-        loadIconWithFallback('saints.png', 'saint-icon', '#66bb6a');
-        loadIconWithFallback('miracles.png', 'miracle-icon', '#42a5f5');
+        // Try multiple possible paths for the icons
+        tryLoadIcon('popes.png', 'pope-icon');
+        tryLoadIcon('saints.png', 'saint-icon');
+        tryLoadIcon('miracles.png', 'miracle-icon');
 
         // Process each category of data
         for (const [category, entries] of Object.entries(data)) {
@@ -189,10 +210,11 @@ async function initMap() {
                     'circle-color': getClusterColor(category),
                     'circle-radius': [
                         'step', ['get', 'point_count'],
-                        15, 10, 20, 30, 25, 100, 30
+                        20, 10, 25, 30, 30, 100, 35
                     ],
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#ffffff'
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.9
                 }
             });
 
@@ -204,10 +226,12 @@ async function initMap() {
                 layout: {
                     'text-field': '{point_count_abbreviated}',
                     'text-font': ['Noto Sans Regular'],
-                    'text-size': 14
+                    'text-size': 16
                 },
                 paint: {
-                    'text-color': '#ffffff'
+                    'text-color': '#ffffff',
+                    'text-halo-color': '#000000',
+                    'text-halo-width': 1
                 }
             });
 
@@ -218,7 +242,7 @@ async function initMap() {
                 filter: ['!', ['has', 'point_count']],
                 layout: {
                     'icon-image': getCategoryIcon(category),
-                    'icon-size': 0.08,
+                    'icon-size': 0.12,
                     'icon-allow-overlap': false,
                     'icon-anchor': 'bottom'
                 }
@@ -227,11 +251,35 @@ async function initMap() {
             map.on('click', unclusteredLayerId, e => showPopupForCategory(category, e));
 
             map.on('click', clusterLayerId, e => {
+                console.log('Cluster clicked!', e);
                 const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
+                if (!features.length) {
+                    console.log('No cluster features found');
+                    return;
+                }
+                
                 const clusterId = features[0].properties.cluster_id;
-                map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
-                    if (err) return;
-                    map.easeTo({ center: features[0].geometry.coordinates, zoom });
+                const source = map.getSource(sourceId);
+                
+                console.log('Cluster ID:', clusterId, 'Source:', sourceId);
+                
+                // Get cluster expansion zoom
+                source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+                    if (err) {
+                        console.log('Error getting cluster expansion zoom:', err);
+                        // Fallback: just zoom in by 2 levels
+                        map.easeTo({ 
+                            center: features[0].geometry.coordinates, 
+                            zoom: Math.min(map.getZoom() + 2, 18)
+                        });
+                        return;
+                    }
+                    
+                    console.log('Zooming to level:', zoom);
+                    map.easeTo({ 
+                        center: features[0].geometry.coordinates, 
+                        zoom: Math.min(zoom, 18)
+                    });
                 });
             });
 
@@ -280,7 +328,7 @@ function addBasemapSwitcher() {
         const option = document.createElement('option');
         option.value = source;
         option.textContent = name;
-        if (source === 'carto_positron') option.selected = true; // Light theme as default
+        if (source === 'carto_dark') option.selected = true; // Dark theme as default
         select.appendChild(option);
     });
 
