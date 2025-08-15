@@ -102,58 +102,87 @@ async function initMap() {
     addBasemapSwitcher();
 
     map.on('load', () => {
-        console.log('🚀 Map loaded, creating icons...');
+        console.log('🚀 Map loaded, creating icons IMMEDIATELY...');
         
-        // STEP 1: Create ALL icons IMMEDIATELY - NO ERRORS POSSIBLE
-        createAllIcons();
+        // CREATE ICONS IMMEDIATELY - FIRST THING!
+        const iconConfig = [
+            { name: 'pope-icon', color: '#ef5350', symbol: '♛' },
+            { name: 'saint-icon', color: '#66bb6a', symbol: '✝' },
+            { name: 'miracle-icon', color: '#42a5f5', symbol: '★' }
+        ];
         
-        // STEP 2: Create all layers - icons are guaranteed to exist
+        iconConfig.forEach(config => {
+            const size = 48;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw filled circle
+            ctx.fillStyle = config.color;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw white border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Draw symbol
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(config.symbol, size/2, size/2);
+            
+            // Add to map IMMEDIATELY
+            const imgData = ctx.getImageData(0, 0, size, size);
+            map.addImage(config.name, imgData);
+            console.log(`✅ CREATED ${config.name} with symbol ${config.symbol}`);
+        });
+        
+        // IMMEDIATELY AFTER ICONS - CREATE LAYERS
         createAllLayers(data);
         
-        // STEP 3: Try to load real images in background (optional enhancement)
-        loadRealImages();
+        // THEN TRY TO LOAD REAL IMAGES (background task)
+        setTimeout(() => {
+            ['popes.png', 'saints.png', 'miracles.png'].forEach((filename, index) => {
+                const iconName = ['pope-icon', 'saint-icon', 'miracle-icon'][index];
+                map.loadImage(filename, (err, img) => {
+                    if (!err && img) {
+                        if (map.hasImage(iconName)) {
+                            map.removeImage(iconName);
+                        }
+                        map.addImage(iconName, img);
+                        console.log(`🎨 Replaced ${iconName} with real PNG`);
+                    } else {
+                        console.log(`ℹ️ Using symbol for ${iconName} (PNG not found)`);
+                        // Try backup icons from HTML if available
+                        if (window.backupIcons && window.backupIcons[iconName]) {
+                            const img = new Image();
+                            img.onload = () => {
+                                if (map.hasImage(iconName)) {
+                                    map.removeImage(iconName);
+                                }
+                                map.addImage(iconName, img);
+                                console.log(`🔄 Used backup ${iconName}`);
+                            };
+                            img.src = window.backupIcons[iconName];
+                        }
+                    }
+                });
+            });
+        }, 100); // Small delay to ensure layers are created first
         
-        // STEP 4: Initialize UI
+        // Initialize UI
         initializeUI();
-    });
-}
-
-// STEP 1: Create all required icons immediately
-function createAllIcons() {
-    const icons = [
-        { name: 'pope-icon', color: '#ef5350' },
-        { name: 'saint-icon', color: '#66bb6a' },
-        { name: 'miracle-icon', color: '#42a5f5' }
-    ];
-    
-    icons.forEach(icon => {
-        const size = 64;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        
-        // Draw colored circle
-        ctx.fillStyle = icon.color;
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2 - 4, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        // Add white border
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        
-        // Add to map
-        const imgData = ctx.getImageData(0, 0, size, size);
-        map.addImage(icon.name, imgData);
-        console.log(`✅ Created ${icon.name}`);
     });
 }
 
 // STEP 2: Create all layers (icons are guaranteed to exist)
 function createAllLayers(data) {
-    console.log('🏗️ Creating layers...');
+    console.log('🏗️ Creating layers with existing icons...');
     
     for (const [category, entries] of Object.entries(data)) {
         const geojson = {
@@ -240,25 +269,6 @@ function createAllLayers(data) {
     }
     
     console.log('✅ All layers created successfully');
-}
-
-// STEP 3: Try to load real images (background task)
-function loadRealImages() {
-    const realImages = [
-        { path: 'popes.png', name: 'pope-icon' },
-        { path: 'saints.png', name: 'saint-icon' },
-        { path: 'miracles.png', name: 'miracle-icon' }
-    ];
-    
-    realImages.forEach(img => {
-        map.loadImage(img.path, (err, image) => {
-            if (!err && image) {
-                map.removeImage(img.name);
-                map.addImage(img.name, image);
-                console.log(`🎨 Enhanced ${img.name} with real image`);
-            }
-        });
-    });
 }
 
 // STEP 4: Initialize UI elements
