@@ -184,8 +184,8 @@ async function initMap() {
                 type: 'geojson',
                 data: geojson,
                 cluster: true,
-                clusterMaxZoom: 16, // Fixed - was causing issues at 18
-                clusterRadius: 50 // Back to original size
+                clusterMaxZoom: 15, // Increased for better cluster breakup
+                clusterRadius: 30 // Reduced radius for tighter clustering
             });
 
             map.addLayer({
@@ -229,17 +229,22 @@ async function initMap() {
                 filter: ['!', ['has', 'point_count']],
                 layout: {
                     'icon-image': getCategoryIcon(category),
-                    'icon-size': 0.07, // Back to original size
-                    'icon-allow-overlap': false,
+                    'icon-size': 0.1, // Slightly larger for visibility
+                    'icon-allow-overlap': true, // Allow overlap when clusters break
                     'icon-anchor': 'bottom'
                 }
             });
 
-            map.on('click', unclusteredLayerId, e => showPopupForCategory(category, e));
+            map.on('click', unclusteredLayerId, e => {
+                e.stopPropagation();
+                showPopupForCategory(category, e);
+            });
 
-            // Fixed cluster click handler
+            // Fixed cluster click handler - FORCE zoom in
             map.on('click', clusterLayerId, e => {
                 e.preventDefault();
+                e.stopPropagation();
+                
                 console.log('🔍 Cluster clicked for category:', category);
                 
                 const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
@@ -251,39 +256,27 @@ async function initMap() {
                 const clusterId = features[0].properties.cluster_id;
                 const pointCount = features[0].properties.point_count;
                 const currentZoom = map.getZoom();
+                const coordinates = features[0].geometry.coordinates.slice();
                 
                 console.log(`📍 Cluster details:
                     - ID: ${clusterId}
                     - Point count: ${pointCount}
                     - Source: ${sourceId}
-                    - Current zoom: ${currentZoom}`);
+                    - Current zoom: ${currentZoom}
+                    - Coordinates: ${coordinates}`);
                 
-                const source = map.getSource(sourceId);
+                // FORCE aggressive zoom increase
+                const minZoomIncrease = 3;
+                const targetZoom = Math.min(currentZoom + minZoomIncrease, 18);
                 
-                source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-                    if (err) {
-                        console.log('❌ Error getting expansion zoom:', err);
-                        const newZoom = Math.min(currentZoom + 3, 20);
-                        console.log(`🚀 Fallback zoom to: ${newZoom}`);
-                        
-                        map.flyTo({ 
-                            center: features[0].geometry.coordinates, 
-                            zoom: newZoom,
-                            duration: 1000
-                        });
-                        return;
-                    }
-                    
-                    const targetZoom = Math.max(zoom, currentZoom + 1);
-                    const finalZoom = Math.min(targetZoom, 20);
-                    
-                    console.log(`🎯 Zooming from ${currentZoom} to ${finalZoom}`);
-                    
-                    map.flyTo({ 
-                        center: features[0].geometry.coordinates, 
-                        zoom: finalZoom,
-                        duration: 1000
-                    });
+                console.log(`🚀 FORCING zoom from ${currentZoom} to ${targetZoom}`);
+                
+                // Use flyTo with longer duration for visibility
+                map.flyTo({
+                    center: coordinates,
+                    zoom: targetZoom,
+                    duration: 1500,
+                    essential: true
                 });
             });
 
