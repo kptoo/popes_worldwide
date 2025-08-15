@@ -184,8 +184,8 @@ async function initMap() {
                 type: 'geojson',
                 data: geojson,
                 cluster: true,
-                clusterMaxZoom: 15, // Increased for better cluster breakup
-                clusterRadius: 30 // Reduced radius for tighter clustering
+                clusterMaxZoom: 14, // Lower max zoom for easier breakup
+                clusterRadius: 25 // Smaller radius for tighter clustering
             });
 
             map.addLayer({
@@ -236,15 +236,11 @@ async function initMap() {
             });
 
             map.on('click', unclusteredLayerId, e => {
-                e.stopPropagation();
                 showPopupForCategory(category, e);
             });
 
-            // Fixed cluster click handler - FORCE zoom in
+            // Fixed cluster click handler - REMOVE stopPropagation errors
             map.on('click', clusterLayerId, e => {
-                e.preventDefault();
-                e.stopPropagation();
-                
                 console.log('🔍 Cluster clicked for category:', category);
                 
                 const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
@@ -266,7 +262,7 @@ async function initMap() {
                     - Coordinates: ${coordinates}`);
                 
                 // FORCE aggressive zoom increase
-                const minZoomIncrease = 3;
+                const minZoomIncrease = 5; // Even more aggressive
                 const targetZoom = Math.min(currentZoom + minZoomIncrease, 18);
                 
                 console.log(`🚀 FORCING zoom from ${currentZoom} to ${targetZoom}`);
