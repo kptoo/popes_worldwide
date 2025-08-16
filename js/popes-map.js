@@ -17,25 +17,28 @@ document.addEventListener('DOMContentLoaded', function() {
 //----------------------------------------------------------------------------------------------------------------------
 async function initMap() {
     console.log('🚀 Starting map initialization...');
+    
     try {
         console.log('📡 Fetching church data from /api/church-data...');
         const response = await fetch('/api/church-data');
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+        
         const data = await response.json();
         console.log('✅ Data fetched successfully:', {
             categories: Object.keys(data),
             totalEntries: Object.values(data).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)
         });
-
+        
         // Log sample entries for debugging
         Object.entries(data).forEach(([category, entries]) => {
             if (Array.isArray(entries) && entries.length > 0) {
                 console.log(`📋 Sample ${category} entry:`, entries[0]);
             }
         });
-
+    
         map = new maplibregl.Map({
             container: 'map',
             style: {
@@ -95,11 +98,7 @@ async function initMap() {
                     }
                 },
                 layers: [
-                    {
-                        id: 'base-tiles',
-                        type: 'raster',
-                        source: 'carto_dark'
-                    }
+                    { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
                 ],
                 glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
             },
@@ -110,12 +109,10 @@ async function initMap() {
 
         // Add navigation controls
         map.addControl(new maplibregl.NavigationControl(), 'top-left');
-
+        
         // Add geolocation control
         const geolocateControl = new maplibregl.GeolocateControl({
-            positionOptions: {
-                enableHighAccuracy: true
-            },
+            positionOptions: { enableHighAccuracy: true },
             trackUserLocation: true,
             showUserHeading: true
         });
@@ -124,14 +121,15 @@ async function initMap() {
         // Add basemap switcher control
         addBasemapSwitcher();
 
-        // Load icons and create layers
+        // FIXED: Load icons properly in sequence, then create layers
         map.on('load', () => {
             console.log('🗺️ Map loaded, starting icon and layer creation...');
             loadIconsInSequence(data);
         });
-
+        
     } catch (error) {
         console.error('❌ Error initializing map:', error);
+        // Try to show error to user
         document.getElementById('map').innerHTML = `
             <div style="padding: 20px; color: white; background: rgba(255,0,0,0.8); margin: 20px; border-radius: 8px;">
                 <h3>Error Loading Map</h3>
@@ -142,49 +140,60 @@ async function initMap() {
     }
 }
 
-// Use only the reliable icon loading method
+// FIXED: Use only the reliable alternative icon loading method
 function loadIconsInSequence(data) {
     console.log('📸 Loading icons via reliable Image object method...');
+    console.log('📁 Current URL:', window.location.href);
+    console.log('📂 Current pathname:', window.location.pathname);
+    
     const iconConfigs = [
         { file: 'popes.png', name: 'pope-icon' },
-        { file: 'saints.png', name: 'saint-icon' },
+        { file: 'saints.png', name: 'saint-icon' }, 
         { file: 'miracles.png', name: 'miracle-icon' }
     ];
-
+    
     let loadedCount = 0;
     let successfullyLoaded = [];
-
+    
     iconConfigs.forEach(config => {
         console.log(`📸 Loading ${config.name} via Image object...`);
         const img = new Image();
         img.crossOrigin = 'anonymous';
+        
         img.onload = () => {
-            console.log(`✅ ${config.name} loaded successfully (${img.width}x${img.height})`);
+            console.log(`✅ ${config.name} loaded successfully as Image object (${img.width}x${img.height})`);
+            
             try {
+                // Convert to canvas then to ImageData for MapLibre
                 const canvas = document.createElement('canvas');
                 canvas.width = img.width;
                 canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
+                
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
+                
                 if (map.hasImage(config.name)) {
                     map.removeImage(config.name);
                 }
                 map.addImage(config.name, imageData);
                 console.log(`✅ ${config.name} added to map successfully`);
+                
                 successfullyLoaded.push(config.name);
                 loadedCount++;
-
+                
                 if (loadedCount === iconConfigs.length) {
                     console.log('🎯 All icons loaded successfully:', successfullyLoaded);
+                    console.log('🏗️ Creating map layers...');
                     createAllLayers(data);
                     initializeUI();
                 }
             } catch (e) {
                 console.error(`❌ Error processing ${config.name}:`, e);
                 loadedCount++;
+                
                 if (loadedCount === iconConfigs.length) {
+                    console.log('⚠️ Some icons failed, but proceeding with available ones:', successfullyLoaded);
                     if (successfullyLoaded.length > 0) {
                         createAllLayers(data);
                         initializeUI();
@@ -192,37 +201,50 @@ function loadIconsInSequence(data) {
                 }
             }
         };
+        
         img.onerror = (e) => {
-            console.error(`❌ Failed to load ${config.file}:`, e);
+            console.error(`❌ Failed to load ${config.file} as Image object:`, e);
+            console.log(`🔄 Trying alternative paths for ${config.file}...`);
+            
+            // Try parent directory
             img.src = '../' + config.file;
             img.onerror = () => {
                 console.error(`❌ Also failed: ../${config.file}`);
                 loadedCount++;
+                
                 if (loadedCount === iconConfigs.length) {
+                    console.log('⚠️ Loading complete with some failures. Successful:', successfullyLoaded);
                     if (successfullyLoaded.length > 0) {
                         createAllLayers(data);
                         initializeUI();
                     } else {
-                        console.error('❌ No icons could be loaded. Check if PNG files exist.');
+                        console.error('❌ No icons could be loaded. Check if PNG files exist in the correct location.');
                     }
                 }
             };
         };
+        
         img.src = config.file;
     });
 }
 
-// Create layers with exact same settings as working churches site
+// FIXED: Create layers with EXACT same settings as working churches site
 function createAllLayers(data) {
     console.log('🏗️ Creating layers with exact working settings...');
+    console.log('📊 Processing data categories:', Object.keys(data));
+    
     for (const [category, entries] of Object.entries(data)) {
         console.log(`🔄 Processing ${category}: ${entries.length} entries`);
+        
+        // Validate entries have coordinates
         const validEntries = entries.filter(item => 
             item.Longitude && item.Latitude && 
-            !isNaN(parseFloat(item.Longitude)) && !isNaN(parseFloat(item.Latitude))
+            !isNaN(parseFloat(item.Longitude)) && 
+            !isNaN(parseFloat(item.Latitude))
         );
+        
         console.log(`✅ Valid entries for ${category}: ${validEntries.length}/${entries.length}`);
-
+        
         if (validEntries.length === 0) {
             console.warn(`⚠️ No valid coordinates found for ${category}`);
             continue;
@@ -237,10 +259,7 @@ function createAllLayers(data) {
                     type: 'Point',
                     coordinates: [parseFloat(item.Longitude), parseFloat(item.Latitude)]
                 },
-                properties: {
-                    ...item,
-                    category
-                }
+                properties: { ...item, category }
             }))
         };
 
@@ -253,16 +272,16 @@ function createAllLayers(data) {
 
         console.log(`🗂️ Adding source ${sourceId} with ${geojson.features.length} features`);
 
-        // Add source with exact same clustering settings as working site
+        // Add source with EXACT same clustering settings as working site
         map.addSource(sourceId, {
             type: 'geojson',
             data: geojson,
             cluster: true,
             clusterMaxZoom: 14,
-            clusterRadius: 50
+            clusterRadius: 50  // EXACT same as working site
         });
 
-        // Add cluster layer
+        // Add cluster layer with EXACT same settings as working site
         map.addLayer({
             id: clusterLayerId,
             type: 'circle',
@@ -271,17 +290,16 @@ function createAllLayers(data) {
             paint: {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
-                    'step',
-                    ['get', 'point_count'],
-                    10,
-                    10, 12,
-                    30, 14,
-                    100, 16
+                    'step', ['get', 'point_count'],
+                    10, 10, 12, 30, 14, 100, 16  // EXACT same as working site
                 ]
+                // No stroke properties - same as working site
             }
         });
 
-        // Add count layer
+        console.log(`🎯 Added cluster layer ${clusterLayerId}`);
+
+        // Add count layer with EXACT same settings as working site
         map.addLayer({
             id: countLayerId,
             type: 'symbol',
@@ -292,101 +310,59 @@ function createAllLayers(data) {
                 'text-font': ['Noto Sans Regular'],
                 'text-size': 12
             }
+            // No paint properties - same as working site
         });
 
-        // Add individual points layer
+        console.log(`📊 Added count layer ${countLayerId}`);
+
+        // Add individual points layer with EXACT same icon settings as working site
+        const iconName = getCategoryIcon(category);
+        console.log(`🎨 Using icon ${iconName} for ${category} points`);
+        
         map.addLayer({
             id: unclusteredLayerId,
             type: 'symbol',
             source: sourceId,
             filter: ['!', ['has', 'point_count']],
             layout: {
-                'icon-image': getCategoryIcon(category),
-                'icon-size': 0.07,
-                'icon-allow-overlap': false,
-                'icon-anchor': 'bottom'
+                'icon-image': iconName,
+                'icon-size': 0.07,           // EXACT same as working site
+                'icon-allow-overlap': false, // EXACT same as working site (key difference!)
+                'icon-anchor': 'bottom'      // EXACT same as working site
             }
         });
 
-        // Add event handlers - FIXED CLUSTER CLICK HANDLER
+        console.log(`🏷️ Added points layer ${unclusteredLayerId}`);
+
+        // Add event handlers
         addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId);
     }
-    console.log('✅ All layers created successfully!');
-}
-
-// Add event handlers for clusters and points - FIXED VERSION
-function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
-    // FIXED cluster click handler
-    map.on('click', clusterLayerId, function(e) {
-        const features = map.queryRenderedFeatures(e.point, {
-            layers: [clusterLayerId]
-        });
-        
-        if (!features.length) return;
-        
-        const clusterId = features[0].properties.cluster_id;
-        const source = map.getSource(sourceId);
-        
-        source.getClusterExpansionZoom(clusterId, function(err, zoom) {
-            if (err) {
-                console.error('Error getting cluster expansion zoom:', err);
-                return;
+    
+    console.log('✅ All layers created successfully with exact working settings!');
+    
+    // Try to fit bounds to all features
+    setTimeout(() => {
+        try {
+            const bounds = new maplibregl.LngLatBounds();
+            let hasValidBounds = false;
+            
+            for (const [category, entries] of Object.entries(data)) {
+                entries.forEach(item => {
+                    if (item.Longitude && item.Latitude) {
+                        bounds.extend([parseFloat(item.Longitude), parseFloat(item.Latitude)]);
+                        hasValidBounds = true;
+                    }
+                });
             }
             
-            map.easeTo({
-                center: features[0].geometry.coordinates,
-                zoom: zoom,
-                duration: 500
-            });
-        });
-    });
-
-    // Fixed point click handler
-    map.on('click', unclusteredLayerId, e => {
-        e.preventDefault();
-        console.log('📍 Individual point clicked, showing popup...');
-        if (!e.features || !e.features.length) {
-            console.error('❌ No features found in point click');
-            return;
+            if (hasValidBounds && !bounds.isEmpty()) {
+                console.log('🗺️ Fitting map to data bounds');
+                map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+            }
+        } catch (e) {
+            console.warn('Could not fit bounds:', e);
         }
-        const feature = e.features[0];
-        const coordinates = feature.geometry.coordinates.slice();
-        const properties = { ...feature.properties };
-        console.log('📋 Stored feature data:', { coordinates, properties });
-
-        const storedEvent = {
-            features: [{
-                geometry: { coordinates: coordinates },
-                properties: properties
-            }]
-        };
-
-        map.flyTo({
-            center: coordinates,
-            zoom: Math.max(map.getZoom(), 10),
-            duration: 500,
-            essential: true
-        });
-
-        setTimeout(() => {
-            console.log('🎪 Showing popup with stored data...');
-            showPopupForCategory(category, storedEvent);
-        }, 550);
-    });
-
-    // Cursor handlers
-    map.on('mouseenter', clusterLayerId, () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', clusterLayerId, () => {
-        map.getCanvas().style.cursor = '';
-    });
-    map.on('mouseenter', unclusteredLayerId, () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', unclusteredLayerId, () => {
-        map.getCanvas().style.cursor = '';
-    });
+    }, 1000);
 }
 
 // Initialize UI elements
@@ -398,11 +374,37 @@ function initializeUI() {
     console.log('✅ UI initialized');
 }
 
+// Add event handlers for clusters and points
+function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
+    // Cluster click handler - same as working site
+    map.on('click', clusterLayerId, e => {
+        const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
+        if (!features.length) return;
+        
+        // Simple zoom in by 2 levels - same as working site
+        map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: map.getZoom() + 2
+        });
+    });
+
+    // Point click handler
+    map.on('click', unclusteredLayerId, e => {
+        showPopupForCategory(category, e);
+    });
+
+    // Cursor handlers
+    map.on('mouseenter', clusterLayerId, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', clusterLayerId, () => map.getCanvas().style.cursor = '');
+    map.on('mouseenter', unclusteredLayerId, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', unclusteredLayerId, () => map.getCanvas().style.cursor = '');
+}
+
 // Add basemap switcher
 function addBasemapSwitcher() {
     const basemaps = {
         'Dark': 'carto_dark',
-        'Light': 'carto_positron',
+        'Light': 'carto_positron', 
         'Street': 'osm_standard',
         'Terrain': 'stamen_terrain',
         'Wiki': 'wikimedia'
@@ -425,31 +427,44 @@ function addBasemapSwitcher() {
 
     select.addEventListener('change', (e) => {
         map.getLayer('base-tiles') && map.removeLayer('base-tiles');
-        map.addLayer({
-            id: 'base-tiles',
-            type: 'raster',
-            source: e.target.value
-        }, 'background');
+        map.addLayer({ id: 'base-tiles', type: 'raster', source: e.target.value }, 'background');
     });
 
     switcher.appendChild(select);
-    map.addControl({
-        onAdd: () => switcher,
-        onRemove: () => {}
-    }, 'top-right');
+    map.addControl({ onAdd: () => switcher, onRemove: () => {} }, 'top-right');
 }
 
-// Get cluster colors
+// Get cluster colors - EXACT same as working site
 function getClusterColor(category) {
     switch (category) {
-        case 'popes':
-            return ['step', ['get', 'point_count'], '#ffebee', 10, '#ef9a9a', 30, '#e57373', 100, '#c62828'];
-        case 'saints':
-            return ['step', ['get', 'point_count'], '#e8f5e9', 10, '#a5d6a7', 30, '#66bb6a', 100, '#2e7d32'];
-        case 'miracles':
-            return ['step', ['get', 'point_count'], '#e3f2fd', 10, '#90caf9', 30, '#42a5f5', 100, '#1565c0'];
-        default:
-            return ['step', ['get', 'point_count'], '#eeeeee', 10, '#bdbdbd', 30, '#9e9e9e', 100, '#616161'];
+        case 'popes': // 🔴 Shades of red
+            return ['step', ['get', 'point_count'],
+                '#ffebee', 10,  // lightest red
+                '#ef9a9a', 30,  // medium red
+                '#e57373', 100, // darker red
+                '#c62828'       // darkest red
+            ];
+        case 'saints': // 🟢 Shades of green
+            return ['step', ['get', 'point_count'],
+                '#e8f5e9', 10,  // lightest green
+                '#a5d6a7', 30,  // medium green
+                '#66bb6a', 100, // darker green
+                '#2e7d32'       // darkest green
+            ];
+        case 'miracles': // 🔵 Shades of blue
+            return ['step', ['get', 'point_count'],
+                '#e3f2fd', 10,  // lightest blue
+                '#90caf9', 30,  // medium blue
+                '#42a5f5', 100, // darker blue
+                '#1565c0'       // darkest blue
+            ];
+        default: // fallback grey
+            return ['step', ['get', 'point_count'],
+                '#eeeeee', 10,
+                '#bdbdbd', 30,
+                '#9e9e9e', 100,
+                '#616161'
+            ];
     }
 }
 
@@ -463,182 +478,117 @@ function getCategoryIcon(category) {
     }
 }
 
-// Show popup for category with better error handling
+// Show popup for category
 function showPopupForCategory(category, e) {
-    console.log('🎪 showPopupForCategory called for:', category);
-    if (!e || !e.features || !e.features.length) {
-        console.error('❌ Invalid event object or no features found');
-        return;
-    }
-
-    const feature = e.features[0];
-    if (!feature || !feature.properties || !feature.geometry) {
-        console.error('❌ Invalid feature structure');
-        return;
-    }
-
-    const props = feature.properties;
-    const coords = feature.geometry.coordinates;
-    console.log('📋 Feature properties:', props);
-    console.log('📍 Coordinates:', coords);
-
+    const props = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates;
     let html = '';
-
+    
     if (category === 'popes') {
         const source = map.getSource(`${category}-source`);
-        if (!source || !source._data || !source._data.features) {
-            console.error('❌ Invalid source data for popes');
-            return;
-        }
-
         const allPopes = source._data.features;
-        const sameLocationPopes = allPopes.filter(f => 
-            f.geometry && f.geometry.coordinates &&
+        const sameLocationPopes = allPopes.filter(f =>
             Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
             Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
         );
 
         if (sameLocationPopes.length <= 1) {
             const formatDate = (value) => {
-                if (!value) return '';
                 const date = new Date(value);
                 return isNaN(date.getTime()) ? value : date.toDateString();
             };
-
-            html = `
-                <div class="pope-card">
-                    <div class="pope-card-header">${props['Papal Name'] || 'Unknown Pope'}</div>
-                    <div><strong>Actual Name:</strong> ${props['Actual Name'] || 'N/A'}</div>
-                    <div><strong>Number:</strong> ${props['Pope Number'] || 'N/A'}</div>
-                    <div><strong>Birth Place:</strong> ${props['Birth Place'] || 'N/A'}</div>
-                    <div><strong>Country:</strong> ${props['Country'] || 'N/A'}</div>
-                    <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : 'N/A'}</div>
-                    <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : 'N/A'}</div>
-                    <div><strong>Election Age:</strong> ${props['Age at Election'] || 'N/A'}</div>
-                    <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : 'N/A'}</div>
-                    <div><strong>Installation Age:</strong> ${props['Age at Installation'] || 'N/A'}</div>
-                    <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : 'N/A'}</div>
-                    <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || 'N/A'}</div>
-                    <div><strong>Length:</strong> ${props['Length'] || 'N/A'}</div>
-                    <div><strong>Century:</strong> ${props['Century'] || 'N/A'}</div>
-                </div>
-            `;
+            
+            html = `<div class="pope-card">
+                <div class="pope-card-header">${props['Papal Name']}</div>
+                <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
+                <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
+                <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
+                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
+                <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
+                <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
+                <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
+                <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
+                <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
+                <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
+                <div><strong>Length:</strong> ${props['Length'] || ''}</div>
+                <div><strong>Century:</strong> ${props['Century'] || ''}</div>
+            </div>`;
         } else {
-            html = `
-                <div class="carousel-container">
-                    <div id="pope-carousel-content" class="pope-card"></div>
-                    <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
-                        <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
-                        <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
-                        <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
-                    </div>
+            html = `<div class="carousel-container">
+                <div id="pope-carousel-content" class="pope-card"></div>
+                <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
+                    <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
+                    <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
+                    <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
                 </div>
-            `;
-            window.popeCarouselData = {
-                index: 0,
-                popes: sameLocationPopes
-            };
+            </div>`;
+            window.popeCarouselData = { index: 0, popes: sameLocationPopes };
         }
 
-        new maplibregl.Popup()
-            .setLngLat(coords)
-            .setHTML(html)
-            .addTo(map);
-
+        new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
         if (sameLocationPopes.length > 1) updatePopeCarousel(category);
-
-    } else if (category === 'saints') {
+    }
+    else if (category === 'saints') {
         const source = map.getSource(`${category}-source`);
-        if (!source || !source._data || !source._data.features) {
-            console.error('❌ Invalid source data for saints');
-            return;
-        }
-
         const allSaints = source._data.features;
-        const sameLocationSaints = allSaints.filter(f => 
-            f.geometry && f.geometry.coordinates &&
+        const sameLocationSaints = allSaints.filter(f =>
             Math.abs(f.geometry.coordinates[0] - coords[0]) < 0.00001 &&
             Math.abs(f.geometry.coordinates[1] - coords[1]) < 0.00001
         );
-
+        
         const feastDateFormatted = props['Feast'] ? (() => {
-            try {
-                const [month, day] = props['Feast'].toString().split('.').map(Number);
-                if (!month || !day) return '';
-                const date = new Date(1970, month - 1, day);
-                return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
-            } catch (e) {
-                return props['Feast'];
-            }
+            const [month, day] = props['Feast'].toString().split('.').map(Number);
+            if (!month || !day) return '';
+            const date = new Date(1970, month - 1, day);
+            return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
         })() : '';
 
         const formatDate = (value) => {
-            if (!value) return '';
             const date = new Date(value);
             return isNaN(date.getTime()) ? value : date.toDateString();
         };
 
         if (sameLocationSaints.length <= 1) {
-            html = `
-                <div class="pope-card">
-                    <div class="pope-card-header">${fE(props.Name) || 'Unknown Saint'}</div>
-                    <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : 'N/A'}</div>
-                    <div><strong>Born Location:</strong> ${fE(props['Born Location']) || 'N/A'}</div>
-                    <div><strong>Country:</strong> ${props['Country'] || 'N/A'}</div>
-                    <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : 'N/A'}</div>
-                    <div><strong>Died Location:</strong> ${fE(props['Died Location']) || 'N/A'}</div>
-                    <div><strong>Feast Date:</strong> ${feastDateFormatted || 'N/A'}</div>
-                    <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : 'N/A'}</div>
-                    <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || 'N/A'}</div>
-                    <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : 'N/A'}</div>
-                    <div><strong>Bio:</strong> ${fE(props['Bio']) || 'N/A'}</div>
-                </div>
-            `;
+            html = `<div class="pope-card">
+                <div class="pope-card-header">${fE(props.Name)}</div>
+                <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
+                <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
+                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+                <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
+                <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
+                <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted)}</div>
+                <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
+                <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
+                <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
+                <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
+            </div>`;
         } else {
-            html = `
-                <div class="carousel-container">
-                    <div id="pope-carousel-content" class="pope-card"></div>
-                    <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
-                        <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
-                        <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
-                        <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
-                    </div>
+            html = `<div class="carousel-container">
+                <div id="pope-carousel-content" class="pope-card"></div>
+                <div class="carousel-controls" style="text-align: center; margin-top: 10px;">
+                    <button class="carousel-button left" onclick="prevPope('${category}')">&#10094;</button>
+                    <span id="carousel-counter" style="margin: 0 10px; font-weight: bold; color: #003366;"></span>
+                    <button class="carousel-button right" onclick="nextPope('${category}')">&#10095;</button>
                 </div>
-            `;
-            window.popeCarouselData = {
-                index: 0,
-                popes: sameLocationSaints
-            };
+            </div>`;
+            window.popeCarouselData = { index: 0, popes: sameLocationSaints };
         }
 
-        new maplibregl.Popup()
-            .setLngLat(coords)
-            .setHTML(html)
-            .addTo(map);
-
+        new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
         if (sameLocationSaints.length > 1) updatePopeCarousel(category);
-
-    } else if (category === 'miracles') {
-        html = `
-            <div class="pope-card">
-                <div class="pope-card-header">Miracle Summary</div>
-                <div><strong>Miracle:</strong> ${props.Summary || 'N/A'}</div>
-                <div><strong>Location:</strong> ${props.Location || 'N/A'}</div>
-                <div><strong>Date:</strong> ${props.Date ? new Date(props.Date).toDateString() : 'N/A'}</div>
-                <div><strong>Details:</strong> ${props['Additional Details'] || 'N/A'}</div>
-                <div><strong>Summaries:</strong> ${props['Summaries'] || 'N/A'}</div>
-            </div>
-        `;
-        new maplibregl.Popup()
-            .setLngLat(coords)
-            .setHTML(html)
-            .addTo(map);
-    } else {
-        console.error('❌ Unknown category:', category);
-        return;
+    } 
+    else if (category === 'miracles') {
+        html = `<div class="pope-card">
+            <div class="pope-card-header">Miracle Summary</div>
+            <div><strong>Miracle:</strong> ${props.Summary || ''}</div>
+            <div><strong>Location:</strong> ${props.Location || ''}</div>
+            <div><strong>Date:</strong> ${props.Date ? new Date(props.Date).toDateString() : ''}</div>
+            <div><strong>Details:</strong> ${props['Additional Details'] || ''}</div>
+            <div><strong>Summaries:</strong> ${props['Summaries'] || ''}</div>
+        </div>`;
+        new maplibregl.Popup().setLngLat(coords).setHTML(html).addTo(map);
     }
-
-    console.log('✅ Popup created successfully for category:', category);
 }
 
 // Search and filtering functions
@@ -650,6 +600,7 @@ async function fetchData() {
     const response = await fetch('/api/church-data');
     CSVall = await response.json();
 }
+
 fetchData();
 
 function toggleMenu() {
@@ -690,7 +641,7 @@ function filterList(category) {
     currentList = CSVall[category] || [];
 
     if (category === "popes"){
-        currentList.filter(item => 
+        currentList.filter(item =>
             (item['Papal Name'] && item['Papal Name'].toLowerCase().includes(query)) ||
             (item['Actual Name'] && item['Actual Name'].toLowerCase().includes(query)) ||
             (item['Birth Place'] && item['Birth Place'].toLowerCase().includes(query)) ||
@@ -703,8 +654,7 @@ function filterList(category) {
                 <div class="church-details">
                     <strong>Actual Name:</strong> ${item["Actual Name"] || ""}<br>
                     <strong>Country:</strong> ${item["Country"] || ""}
-                </div>
-            `;
+                </div>`;
             li.onclick = () => {
                 if (item.Latitude && item.Longitude) {
                     toggleMenu();
@@ -717,7 +667,7 @@ function filterList(category) {
             listContainer.appendChild(li);
         });
     } else if (currentCategory === "miracles") {
-        currentList.filter(item => 
+        currentList.filter(item =>
             (item.Summary && item.Summary.toLowerCase().includes(query)) ||
             (item.Country2 && item.Country2.toLowerCase().includes(query)) ||
             (item.Location && item.Location.toLowerCase().includes(query))
@@ -729,8 +679,7 @@ function filterList(category) {
                 <div class="church-details">
                     <strong>Location:</strong> ${item["Location"] || ""}<br>
                     <strong>Country:</strong> ${item["Country2"] || ""}
-                </div>
-            `;
+                </div>`;
             li.onclick = () => {
                 if (item.Latitude && item.Longitude) {
                     toggleMenu();
@@ -775,11 +724,9 @@ function displaySaints(saints) {
         li.innerHTML = `
             <div class="church-title">${saint["Name"] || ""}</div>
             <div class="church-details">
-                <strong>Country:</strong> ${saint["Country"] || ""}
-                <br>
-                <strong>Bio:</strong> ${saint["Bio"] || ""}
-            </div>
-        `;
+                <strong>Country:</strong> ${saint["Country"] || ""} <br>
+                <strong>Bio:</strong> ${saint["Bio"] || ""} 
+            </div>`;
         li.onclick = () => {
             if (saint.Latitude && saint.Longitude) {
                 toggleMenu();
@@ -835,11 +782,9 @@ function toggleCategory(category, visible) {
 document.getElementById('toggle-popes').addEventListener('change', function(e) {
     toggleCategory('popes', e.target.checked);
 });
-
 document.getElementById('toggle-saints').addEventListener('change', function(e) {
     toggleCategory('saints', e.target.checked);
 });
-
 document.getElementById('toggle-miracles').addEventListener('change', function(e) {
     toggleCategory('miracles', e.target.checked);
 });
@@ -849,6 +794,7 @@ function updatePopeCarousel(x) {
     const container = document.getElementById('pope-carousel-content');
     const data = window.popeCarouselData;
     if (!data || !data.popes || !data.popes.length) return;
+
     const props = data.popes[data.index].properties;
 
     if (x==="popes"){
@@ -856,24 +802,22 @@ function updatePopeCarousel(x) {
             const date = new Date(value);
             return isNaN(date.getTime()) ? value : date.toDateString();
         };
-        container.innerHTML = `
-            <div class="pope-card" style="height: 370px; overflow-y: auto;">
-                <div class="pope-card-header">${props['Papal Name']}</div>
-                <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
-                <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
-                <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
-                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-                <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
-                <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
-                <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
-                <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
-                <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
-                <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
-                <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
-                <div><strong>Length:</strong> ${props['Length'] || ''}</div>
-                <div><strong>Century:</strong> ${props['Century'] || ''}</div>
-            </div>
-        `;
+        container.innerHTML = `<div class="pope-card" style="height: 370px; overflow-y: auto;">
+            <div class="pope-card-header">${props['Papal Name']}</div>
+            <div><strong>Actual Name:</strong> ${props['Actual Name'] || ''}</div>
+            <div><strong>Number:</strong> ${props['Pope Number'] || ''}</div>
+            <div><strong>Birth Place:</strong> ${props['Birth Place'] || ''}</div>
+            <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+            <div><strong>Birth Day:</strong> ${props['Birthday2'] ? formatDate(props['Birthday2']) : ''}</div>
+            <div><strong>Elected Date:</strong> ${props['Elected Date2'] ? formatDate(props['Elected Date2']) : ''}</div>
+            <div><strong>Election Age:</strong> ${props['Age at Election'] || ''}</div>
+            <div><strong>Installed Date:</strong> ${props['Installed Date'] ? formatDate(props['Installed Date']) : ''}</div>
+            <div><strong>Installation Age:</strong> ${props['Age at Installation'] || ''}</div>
+            <div><strong>End of Reign:</strong> ${props['End of Reign Date'] ? formatDate(props['End of Reign Date']) : ''}</div>
+            <div><strong>End of Reign Age:</strong> ${props['End of Reign Age'] || ''}</div>
+            <div><strong>Length:</strong> ${props['Length'] || ''}</div>
+            <div><strong>Century:</strong> ${props['Century'] || ''}</div>
+        </div>`;
     } else {
         const feastDateFormatted1 = props['Feast'] ? (() => {
             const [month, day] = props['Feast'].toString().split('.').map(Number);
@@ -881,47 +825,49 @@ function updatePopeCarousel(x) {
             const date = new Date(1970, month - 1, day);
             return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(date);
         })() : '';
+
         const formatDate = (value) => {
             const date = new Date(value);
             return isNaN(date.getTime()) ? value : date.toDateString();
         };
-        container.innerHTML = `
-            <div class="pope-card" style="height: 370px; overflow-y: auto;">
-                <div class="pope-card-header">${fE(props.Name)}</div>
-                <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
-                <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
-                <div><strong>Country:</strong> ${props['Country'] || ''}</div>
-                <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
-                <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
-                <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted1)}</div>
-                <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
-                <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
-                <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
-                <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
-            </div>
-        `;
+        
+        container.innerHTML = `<div class="pope-card" style="height: 370px; overflow-y: auto;">
+            <div class="pope-card-header">${fE(props.Name)}</div>
+            <div><strong>Born Date:</strong> ${props['Born2'] ? formatDate(props['Born']) : ''}</div>
+            <div><strong>Born Location:</strong> ${fE(props['Born Location']) || ''}</div>
+            <div><strong>Country:</strong> ${props['Country'] || ''}</div>
+            <div><strong>Died Date:</strong> ${props['Died2'] ? formatDate(props['Died']) : ''}</div>
+            <div><strong>Died Location:</strong> ${fE(props['Died Location']) || ''}</div>
+            <div><strong>Feast Date:</strong> ${formatDate(feastDateFormatted1)}</div>
+            <div><strong>Beatified:</strong> ${props['Beatified'] ? formatDate(props['Beatified']) : ''}</div>
+            <div><strong>Beatified Location:</strong> ${props['Beatified Location'] || ''}</div>
+            <div><strong>Canonized:</strong> ${props['Canonised'] ? formatDate(props['Canonised']) : ''}</div>
+            <div><strong>Bio:</strong> ${fE(props['Bio']) || ''}</div>
+        </div>`;
     }
+
     const counter = document.getElementById('carousel-counter');
     counter.textContent = `${data.index + 1} of ${data.popes.length}`;
 }
 
 function prevPope(x) {
     if (!window.popeCarouselData) return;
-    window.popeCarouselData.index = (window.popeCarouselData.index - 1 + window.popeCarouselData.popes.length) % window.popeCarouselData.popes.length;
+    window.popeCarouselData.index =
+        (window.popeCarouselData.index - 1 + window.popeCarouselData.popes.length) %
+        window.popeCarouselData.popes.length;
     updatePopeCarousel(x);
 }
 
 function nextPope(x) {
     if (!window.popeCarouselData) return;
-    window.popeCarouselData.index = (window.popeCarouselData.index + 1) % window.popeCarouselData.popes.length;
+    window.popeCarouselData.index =
+        (window.popeCarouselData.index + 1) %
+        window.popeCarouselData.popes.length;
     updatePopeCarousel(x);
 }
 
-// Fix encoding function with better error handling
+// Fix encoding function
 function fE(str) {
-    if (!str || typeof str !== 'string') {
-        return str || '';
-    }
     try {
         const fixed = decodeURIComponent(escape(str));
         if (/[\u0080-\uFFFF]/.test(str) && !/[\u0080-\uFFFF]/.test(fixed)) {
@@ -929,7 +875,6 @@ function fE(str) {
         }
         return fixed;
     } catch (e) {
-        console.warn('Error in fE function:', e);
         return str;
     }
 }
