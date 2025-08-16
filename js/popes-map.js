@@ -292,8 +292,8 @@ function createAllLayers(data) {
                 'circle-radius': [
                     'step', ['get', 'point_count'],
                     10, 10, 12, 30, 14, 100, 16  // EXACT same as working site
-                ]
-                // No stroke properties - same as working site
+                ],
+                'circle-opacity': 0.9 // Added for hover effects
             }
         });
 
@@ -376,28 +376,188 @@ function initializeUI() {
 
 // Add event handlers for clusters and points
 function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
-    // Cluster click handler - same as working site
+    // Enhanced cluster click handler with gradual dispersal
     map.on('click', clusterLayerId, e => {
         const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
         if (!features.length) return;
         
-        // Simple zoom in by 2 levels - same as working site
-        map.easeTo({
-            center: features[0].geometry.coordinates,
-            zoom: map.getZoom() + 2
+        const clusterId = features[0].properties.cluster_id;
+        const clusterCoords = features[0].geometry.coordinates;
+        const pointCount = features[0].properties.point_count;
+        
+        console.log(`🎯 Cluster clicked: ${pointCount} points at zoom ${map.getZoom()}`);
+        
+        // Immediate visual feedback - slightly scale down the clicked cluster
+        const clickedPoint = map.project(clusterCoords);
+        const tempMarker = document.createElement('div');
+        tempMarker.style.cssText = `
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: rgba(255,255,255,0.8);
+            border: 2px solid #333;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: cluster-click 0.3s ease-out;
+            z-index: 1000;
+        `;
+        
+        // Add CSS animation
+        if (!document.getElementById('cluster-click-style')) {
+            const style = document.createElement('style');
+            style.id = 'cluster-click-style';
+            style.textContent = `
+                @keyframes cluster-click {
+                    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+                    100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        tempMarker.style.left = clickedPoint.x + 'px';
+        tempMarker.style.top = clickedPoint.y + 'px';
+        map.getContainer().appendChild(tempMarker);
+        
+        // Remove the temporary marker after animation
+        setTimeout(() => {
+            if (tempMarker.parentNode) {
+                tempMarker.parentNode.removeChild(tempMarker);
+            }
+        }, 300);
+        
+        // Get the optimal zoom level to break this cluster apart
+        map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) {
+                console.warn('Failed to get cluster expansion zoom, using fallback');
+                // Fallback: zoom in by 3 levels
+                map.flyTo({
+                    center: clusterCoords,
+                    zoom: Math.min(map.getZoom() + 3, 20),
+                    duration: 1200,
+                    essential: true
+                });
+                return;
+            }
+            
+            console.log(`📈 Expanding cluster to zoom level ${zoom}`);
+            
+            // Fly to the optimal zoom level with smooth animation
+            map.flyTo({
+                center: clusterCoords,
+                zoom: Math.min(zoom + 1, 20), // Add 1 to ensure full dispersal
+                duration: 1200,
+                essential: true,
+                easing: (t) => t * (2 - t) // Smooth easing
+            });
+            
+            // If still clustered after zoom, continue breaking it apart
+            setTimeout(() => {
+                const stillClustered = map.queryRenderedFeatures(
+                    map.project(clusterCoords), 
+                    { layers: [clusterLayerId] }
+                );
+                
+                if (stillClustered.length > 0) {
+                    console.log('🔄 Cluster still exists, zooming in further...');
+                    map.flyTo({
+                        center: clusterCoords,
+                        zoom: Math.min(map.getZoom() + 2, 20),
+                        duration: 800,
+                        essential: true
+                    });
+                }
+            }, 1300); // Wait for first animation to complete
         });
     });
 
-    // Point click handler
+    // Enhanced point click handler with centered popup
     map.on('click', unclusteredLayerId, e => {
-        showPopupForCategory(category, e);
+        const coordinates = e.features[0].geometry.coordinates.slice();
+        const props = e.features[0].properties;
+        
+        console.log('📍 Individual point clicked, centering popup...');
+        
+        // Calculate optimal center position for popup visibility
+        const mapContainer = map.getContainer();
+        const mapWidth = mapContainer.offsetWidth;
+        const mapHeight = mapContainer.offsetHeight;
+        
+        // Dynamic popup size estimation based on content
+        let popupWidth = 320;
+        let popupHeight = 350;
+        
+        // Adjust for different categories (saints have more content)
+        if (category === 'saints') {
+            popupHeight = 450;
+        } else if (category === 'popes') {
+            popupHeight = 400;
+        }
+        
+        // Calculate the optimal offset to center popup in viewport
+        const pixelPoint = map.project(coordinates);
+        
+        // Calculate where the popup would appear relative to map center
+        const mapCenterX = mapWidth / 2;
+        const mapCenterY = mapHeight / 2;
+        
+        // Calculate offset needed to center the popup
+        const offsetX = (popupWidth / 2) + 20; // Add padding
+        const offsetY = (popupHeight / 2) + 40; // Add padding for popup pointer
+        
+        // Calculate the new center point
+        const newPixelX = pixelPoint.x - offsetX + mapCenterX;
+        const newPixelY = pixelPoint.y - offsetY + mapCenterY;
+        
+        // Convert back to geographic coordinates
+        const newCenter = map.unproject([newPixelX, newPixelY]);
+        
+        // Ensure minimum zoom for popup readability
+        const targetZoom = Math.max(map.getZoom(), 8);
+        
+        // Smooth fly to the new center position
+        map.flyTo({
+            center: newCenter,
+            zoom: targetZoom,
+            duration: 600,
+            essential: true,
+            easing: (t) => {
+                // Custom easing for smooth popup centering
+                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            }
+        });
+        
+        // Show popup after animation completes
+        setTimeout(() => {
+            showPopupForCategory(category, e);
+        }, 650);
     });
 
-    // Cursor handlers
-    map.on('mouseenter', clusterLayerId, () => map.getCanvas().style.cursor = 'pointer');
-    map.on('mouseleave', clusterLayerId, () => map.getCanvas().style.cursor = '');
-    map.on('mouseenter', unclusteredLayerId, () => map.getCanvas().style.cursor = 'pointer');
-    map.on('mouseleave', unclusteredLayerId, () => map.getCanvas().style.cursor = '');
+    // Cursor handlers with enhanced visual feedback
+    map.on('mouseenter', clusterLayerId, () => {
+        map.getCanvas().style.cursor = 'pointer';
+        // Add subtle hover effect for clusters
+        map.setPaintProperty(clusterLayerId, 'circle-opacity', 0.8);
+    });
+    
+    map.on('mouseleave', clusterLayerId, () => {
+        map.getCanvas().style.cursor = '';
+        // Reset opacity
+        map.setPaintProperty(clusterLayerId, 'circle-opacity', 0.9);
+    });
+    
+    map.on('mouseenter', unclusteredLayerId, () => {
+        map.getCanvas().style.cursor = 'pointer';
+        // Slightly increase icon size on hover for better UX
+        map.setLayoutProperty(unclusteredLayerId, 'icon-size', 0.08);
+    });
+    
+    map.on('mouseleave', unclusteredLayerId, () => {
+        map.getCanvas().style.cursor = '';
+        // Reset icon size
+        map.setLayoutProperty(unclusteredLayerId, 'icon-size', 0.07);
+    });
 }
 
 // Add basemap switcher
