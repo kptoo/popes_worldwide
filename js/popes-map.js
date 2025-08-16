@@ -140,24 +140,39 @@ async function initMap() {
     }
 }
 
-// FIXED: Load icons in proper sequence like the working churches site - ORIGINAL ICONS ONLY
+// FIXED: Load icons using EXACT same paths as the working legend icons
 function loadIconsInSequence(data) {
-    console.log('📸 Loading pope-icon...');
+    console.log('📸 Loading icons using same approach as working legend...');
     
-    // Try multiple paths for pope icon
-    const popeIconPaths = ['popes.png', '../popes.png', '/popes.png', 'pages/popes.png'];
+    // Auto-detect path based on current URL (for pages/ subfolder support)
+    const iconPath = window.location.pathname.includes('/pages/') ? '../' : '';
+    console.log('🔍 Detected icon path prefix:', iconPath);
     
-    tryLoadIcon('popes.png', 'pope-icon', () => {
+    // Use EXACT same simple paths that work for the legend
+    map.loadImage(iconPath + 'popes.png', (error, image) => {
+        if (error) { 
+            console.error('Error loading popes.png:', error); 
+            return; // Stop here if pope icon fails
+        }
+        if (!map.hasImage('pope-icon')) map.addImage('pope-icon', image);
         console.log('✅ Loaded popes.png successfully');
 
         // Load saint icon second
-        console.log('📸 Loading saint-icon...');
-        tryLoadIcon('saints.png', 'saint-icon', () => {
+        map.loadImage(iconPath + 'saints.png', (error, image) => {
+            if (error) { 
+                console.error('Error loading saints.png:', error); 
+                return; // Stop here if saint icon fails
+            }
+            if (!map.hasImage('saint-icon')) map.addImage('saint-icon', image);
             console.log('✅ Loaded saints.png successfully');
 
             // Load miracle icon third
-            console.log('📸 Loading miracle-icon...');
-            tryLoadIcon('miracles.png', 'miracle-icon', () => {
+            map.loadImage(iconPath + 'miracles.png', (error, image) => {
+                if (error) { 
+                    console.error('Error loading miracles.png:', error); 
+                    return; // Stop here if miracle icon fails
+                }
+                if (!map.hasImage('miracle-icon')) map.addImage('miracle-icon', image);
                 console.log('✅ Loaded miracles.png successfully');
 
                 // ONLY after ALL original icons are loaded successfully, create the map layers
