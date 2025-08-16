@@ -16,185 +16,249 @@ document.addEventListener('DOMContentLoaded', function() {
 
 //----------------------------------------------------------------------------------------------------------------------
 async function initMap() {
-    const response = await fetch('/api/church-data');
-    const data = await response.json();
+    console.log('🚀 Starting map initialization...');
     
-    map = new maplibregl.Map({
-        container: 'map',
-        style: {
-            version: 8,
-            sources: {
-                osm_standard: {
-                    type: 'raster',
-                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                    tileSize: 256,
-                    attribution: '© OpenStreetMap contributors',
-                    minzoom: 0,
-                    maxzoom: 19
+    try {
+        console.log('📡 Fetching church data from /api/church-data...');
+        const response = await fetch('/api/church-data');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Data fetched successfully:', {
+            categories: Object.keys(data),
+            totalEntries: Object.values(data).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)
+        });
+        
+        // Log sample entries for debugging
+        Object.entries(data).forEach(([category, entries]) => {
+            if (Array.isArray(entries) && entries.length > 0) {
+                console.log(`📋 Sample ${category} entry:`, entries[0]);
+            }
+        });
+    
+        map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    osm_standard: {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors',
+                        minzoom: 0,
+                        maxzoom: 19
+                    },
+                    carto_positron: {
+                        type: 'raster',
+                        tiles: [
+                            'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-b.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '© CARTO © OpenStreetMap contributors',
+                        minzoom: 0,
+                        maxzoom: 18
+                    },
+                    carto_dark: {
+                        type: 'raster',
+                        tiles: [
+                            'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-b.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-c.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '© CARTO © OpenStreetMap contributors',
+                        minzoom: 0,
+                        maxzoom: 18
+                    },
+                    wikimedia: {
+                        type: 'raster',
+                        tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors, Wikimedia maps',
+                        minzoom: 0,
+                        maxzoom: 18
+                    },
+                    stamen_terrain: {
+                        type: 'raster',
+                        tiles: [
+                            'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
+                            'https://stamen-tiles.b.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
+                            'https://stamen-tiles.c.ssl.fastly.net/terrain/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors',
+                        minzoom: 0,
+                        maxzoom: 18
+                    }
                 },
-                carto_positron: {
-                    type: 'raster',
-                    tiles: [
-                        'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                        'https://cartodb-basemaps-b.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                        'https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png'
-                    ],
-                    tileSize: 256,
-                    attribution: '© CARTO © OpenStreetMap contributors',
-                    minzoom: 0,
-                    maxzoom: 18
-                },
-                carto_dark: {
-                    type: 'raster',
-                    tiles: [
-                        'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-                        'https://cartodb-basemaps-b.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-                        'https://cartodb-basemaps-c.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
-                    ],
-                    tileSize: 256,
-                    attribution: '© CARTO © OpenStreetMap contributors',
-                    minzoom: 0,
-                    maxzoom: 18
-                },
-                wikimedia: {
-                    type: 'raster',
-                    tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
-                    tileSize: 256,
-                    attribution: '© OpenStreetMap contributors, Wikimedia maps',
-                    minzoom: 0,
-                    maxzoom: 18
-                },
-                stamen_terrain: {
-                    type: 'raster',
-                    tiles: [
-                        'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
-                        'https://stamen-tiles.b.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
-                        'https://stamen-tiles.c.ssl.fastly.net/terrain/{z}/{x}/{y}.png'
-                    ],
-                    tileSize: 256,
-                    attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors',
-                    minzoom: 0,
-                    maxzoom: 18
-                }
+                layers: [
+                    { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
+                ],
+                glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
             },
-            layers: [
-                { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
-            ],
-            glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
-        },
-        center: [0, 0],
-        zoom: 2,
-        worldCopyJump: true
-    });
+            center: [0, 0],
+            zoom: 2,
+            worldCopyJump: true
+        });
 
-    // Add navigation controls
-    map.addControl(new maplibregl.NavigationControl(), 'top-left');
-    
-    // Add geolocation control
-    const geolocateControl = new maplibregl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-        showUserHeading: true
-    });
-    map.addControl(geolocateControl, 'top-left');
+        // Add navigation controls
+        map.addControl(new maplibregl.NavigationControl(), 'top-left');
+        
+        // Add geolocation control
+        const geolocateControl = new maplibregl.GeolocateControl({
+            positionOptions: { enableHighAccuracy: true },
+            trackUserLocation: true,
+            showUserHeading: true
+        });
+        map.addControl(geolocateControl, 'top-left');
 
-    // Add basemap switcher control
-    addBasemapSwitcher();
+        // Add basemap switcher control
+        addBasemapSwitcher();
 
-    // FIXED: Load icons properly in sequence, then create layers
-    map.on('load', () => {
-        console.log('🚀 Map loaded, loading icons in sequence...');
-        loadIconsInSequence(data);
-    });
+        // FIXED: Load icons properly in sequence, then create layers
+        map.on('load', () => {
+            console.log('🗺️ Map loaded, starting icon and layer creation...');
+            loadIconsInSequence(data);
+        });
+        
+    } catch (error) {
+        console.error('❌ Error initializing map:', error);
+        // Try to show error to user
+        document.getElementById('map').innerHTML = `
+            <div style="padding: 20px; color: white; background: rgba(255,0,0,0.8); margin: 20px; border-radius: 8px;">
+                <h3>Error Loading Map</h3>
+                <p>Failed to load church data: ${error.message}</p>
+                <p>Please check the console for more details.</p>
+            </div>
+        `;
+    }
 }
 
 // FIXED: Load icons in proper sequence like the working churches site
 function loadIconsInSequence(data) {
-    console.log('📸 Loading pope-icon...');
+    console.log('📸 Starting icon loading process...');
+    console.log('📊 Data received:', data);
     
-    // Try to load pope icon first
-    map.loadImage('popes.png', (error, image) => {
-        if (error) { 
-            console.warn('Could not load popes.png, creating fallback:', error);
-            createFallbackIcon('pope-icon', '#ef5350', '♛');
-        } else {
-            console.log('✅ Loaded popes.png successfully');
-            if (!map.hasImage('pope-icon')) map.addImage('pope-icon', image);
-        }
-
-        // Load saint icon second
-        console.log('📸 Loading saint-icon...');
-        map.loadImage('saints.png', (error, image) => {
-            if (error) { 
-                console.warn('Could not load saints.png, creating fallback:', error);
-                createFallbackIcon('saint-icon', '#66bb6a', '✝');
+    // Create all fallback icons first to ensure they exist
+    createFallbackIcon('pope-icon', '#ef5350', '♛');
+    createFallbackIcon('saint-icon', '#66bb6a', '✝');
+    createFallbackIcon('miracle-icon', '#42a5f5', '★');
+    
+    console.log('✅ All fallback icons created, proceeding to create layers...');
+    
+    // Try to load PNG icons in background, but don't wait for them
+    setTimeout(() => {
+        console.log('📸 Attempting to load PNG icons...');
+        
+        map.loadImage('popes.png', (error, image) => {
+            if (!error && image) {
+                console.log('✅ Loaded popes.png, replacing fallback');
+                if (map.hasImage('pope-icon')) map.removeImage('pope-icon');
+                map.addImage('pope-icon', image);
             } else {
-                console.log('✅ Loaded saints.png successfully');
-                if (!map.hasImage('saint-icon')) map.addImage('saint-icon', image);
+                console.log('ℹ️ Using fallback for popes.png:', error?.message);
             }
-
-            // Load miracle icon third
-            console.log('📸 Loading miracle-icon...');
-            map.loadImage('miracles.png', (error, image) => {
-                if (error) { 
-                    console.warn('Could not load miracles.png, creating fallback:', error);
-                    createFallbackIcon('miracle-icon', '#42a5f5', '★');
-                } else {
-                    console.log('✅ Loaded miracles.png successfully');
-                    if (!map.hasImage('miracle-icon')) map.addImage('miracle-icon', image);
-                }
-
-                // ONLY after ALL icons are loaded/created, create the map layers
-                console.log('🎯 All icons ready, creating map layers...');
-                createAllLayers(data);
-                initializeUI();
-            });
         });
-    });
+
+        map.loadImage('saints.png', (error, image) => {
+            if (!error && image) {
+                console.log('✅ Loaded saints.png, replacing fallback');
+                if (map.hasImage('saint-icon')) map.removeImage('saint-icon');
+                map.addImage('saint-icon', image);
+            } else {
+                console.log('ℹ️ Using fallback for saints.png:', error?.message);
+            }
+        });
+
+        map.loadImage('miracles.png', (error, image) => {
+            if (!error && image) {
+                console.log('✅ Loaded miracles.png, replacing fallback');
+                if (map.hasImage('miracle-icon')) map.removeImage('miracle-icon');
+                map.addImage('miracle-icon', image);
+            } else {
+                console.log('ℹ️ Using fallback for miracles.png:', error?.message);
+            }
+        });
+    }, 100);
+    
+    // Create layers immediately with fallback icons
+    console.log('🎯 Creating map layers with fallback icons...');
+    createAllLayers(data);
+    initializeUI();
 }
 
 // Helper function to create fallback icons
 function createFallbackIcon(iconName, color, symbol) {
-    const size = 48;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    
-    // Draw filled circle
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-    ctx.fill();
-    
-    // Draw white border
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    
-    // Draw symbol
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(symbol, size/2, size/2);
-    
-    // Add to map
-    const imgData = ctx.getImageData(0, 0, size, size);
-    if (!map.hasImage(iconName)) {
+    try {
+        const size = 48;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw filled circle
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw white border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Draw symbol
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(symbol, size/2, size/2);
+        
+        // Add to map
+        const imgData = ctx.getImageData(0, 0, size, size);
+        if (map.hasImage(iconName)) {
+            map.removeImage(iconName);
+        }
         map.addImage(iconName, imgData);
         console.log(`✅ Created fallback ${iconName} with symbol ${symbol}`);
+        return true;
+    } catch (error) {
+        console.error(`❌ Failed to create fallback icon ${iconName}:`, error);
+        return false;
     }
 }
 
 // FIXED: Create layers only after icons are guaranteed to exist
 function createAllLayers(data) {
     console.log('🏗️ Creating layers with loaded icons...');
+    console.log('📊 Processing data categories:', Object.keys(data));
     
     for (const [category, entries] of Object.entries(data)) {
+        console.log(`🔄 Processing ${category}: ${entries.length} entries`);
+        
+        // Validate entries have coordinates
+        const validEntries = entries.filter(item => 
+            item.Longitude && item.Latitude && 
+            !isNaN(parseFloat(item.Longitude)) && 
+            !isNaN(parseFloat(item.Latitude))
+        );
+        
+        console.log(`✅ Valid entries for ${category}: ${validEntries.length}/${entries.length}`);
+        
+        if (validEntries.length === 0) {
+            console.warn(`⚠️ No valid coordinates found for ${category}`);
+            continue;
+        }
+
         const geojson = {
             type: 'FeatureCollection',
-            features: entries.map((item, i) => ({
+            features: validEntries.map((item, i) => ({
                 type: 'Feature',
                 id: `${category}-${i}`,
                 geometry: {
@@ -211,6 +275,8 @@ function createAllLayers(data) {
         const unclusteredLayerId = `${category}-points`;
 
         categoryLayers[category] = [clusterLayerId, countLayerId, unclusteredLayerId];
+
+        console.log(`🗂️ Adding source ${sourceId} with ${geojson.features.length} features`);
 
         // Add source
         map.addSource(sourceId, {
@@ -231,13 +297,15 @@ function createAllLayers(data) {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
                     'step', ['get', 'point_count'],
-                    10, 10, 12, 30, 14, 100, 16
+                    15, 10, 20, 30, 25, 100, 30
                 ],
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 0.9
             }
         });
+
+        console.log(`🎯 Added cluster layer ${clusterLayerId}`);
 
         // Add count layer
         map.addLayer({
@@ -257,25 +325,56 @@ function createAllLayers(data) {
             }
         });
 
+        console.log(`📊 Added count layer ${countLayerId}`);
+
         // Add individual points layer - Icons are guaranteed to exist now!
+        const iconName = getCategoryIcon(category);
+        console.log(`🎨 Using icon ${iconName} for ${category} points`);
+        
         map.addLayer({
             id: unclusteredLayerId,
             type: 'symbol',
             source: sourceId,
             filter: ['!', ['has', 'point_count']],
             layout: {
-                'icon-image': getCategoryIcon(category),
-                'icon-size': 0.1,
+                'icon-image': iconName,
+                'icon-size': 0.8, // Increased size for better visibility
                 'icon-allow-overlap': true,
                 'icon-anchor': 'bottom'
             }
         });
+
+        console.log(`🏷️ Added points layer ${unclusteredLayerId}`);
 
         // Add event handlers
         addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId);
     }
     
     console.log('✅ All layers created successfully with proper icons!');
+    
+    // Try to fit bounds to all features
+    setTimeout(() => {
+        try {
+            const bounds = new maplibregl.LngLatBounds();
+            let hasValidBounds = false;
+            
+            for (const [category, entries] of Object.entries(data)) {
+                entries.forEach(item => {
+                    if (item.Longitude && item.Latitude) {
+                        bounds.extend([parseFloat(item.Longitude), parseFloat(item.Latitude)]);
+                        hasValidBounds = true;
+                    }
+                });
+            }
+            
+            if (hasValidBounds && !bounds.isEmpty()) {
+                console.log('🗺️ Fitting map to data bounds');
+                map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+            }
+        } catch (e) {
+            console.warn('Could not fit bounds:', e);
+        }
+    }, 1000);
 }
 
 // Initialize UI elements
