@@ -378,22 +378,39 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
     map.on('click', clusterLayerId, e => {
         e.preventDefault();
         const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
-        if (!features.length) return;
+        if (!features.length) {
+            console.warn('No cluster features found');
+            return;
+        }
         
-        const clusterId = features[0].properties.cluster_id;
-        const clusterCoords = features[0].geometry.coordinates;
-        const pointCount = features[0].properties.point_count;
+        const feature = features[0];
+        const clusterId = feature.properties.cluster_id;
+        const clusterCoords = feature.geometry.coordinates.slice();
+        const pointCount = feature.properties.point_count;
         
         console.log(`🎯 Cluster clicked: ${pointCount} points at zoom ${map.getZoom()}`);
+        console.log('📋 Cluster ID:', clusterId);
+        console.log('📍 Cluster coords:', clusterCoords);
+        
+        // Get source object
+        const source = map.getSource(sourceId);
+        if (!source) {
+            console.error('❌ Source not found:', sourceId);
+            return;
+        }
+        
+        console.log('🔍 Getting cluster expansion zoom...');
         
         // Get the optimal zoom level to break this cluster apart
-        map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
             if (err) {
-                console.warn('Failed to get cluster expansion zoom, using fallback');
+                console.warn('❌ Failed to get cluster expansion zoom:', err);
                 // Fallback: zoom in by 3 levels
+                const fallbackZoom = Math.min(map.getZoom() + 3, 20);
+                console.log(`🔄 Using fallback zoom: ${fallbackZoom}`);
                 map.flyTo({
                     center: clusterCoords,
-                    zoom: Math.min(map.getZoom() + 3, 20),
+                    zoom: fallbackZoom,
                     duration: 1000,
                     essential: true
                 });
@@ -409,21 +426,54 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
                 duration: 1000,
                 essential: true
             });
+            
+            // Check if cluster is still there after zoom and continue breaking if needed
+            setTimeout(() => {
+                console.log('🔍 Checking if cluster still exists after zoom...');
+                const stillClustered = map.queryRenderedFeatures(
+                    map.project(clusterCoords), 
+                    { layers: [clusterLayerId] }
+                );
+                
+                if (stillClustered.length > 0) {
+                    console.log('🔄 Cluster still exists, zooming in further...');
+                    map.flyTo({
+                        center: clusterCoords,
+                        zoom: Math.min(map.getZoom() + 2, 20),
+                        duration: 800,
+                        essential: true
+                    });
+                } else {
+                    console.log('✅ Cluster successfully dispersed!');
+                }
+            }, 1100); // Wait for animation to complete
         });
     });
 
-    // Simplified point click handler with centered popup
+    // Fixed point click handler - store data before animation
     map.on('click', unclusteredLayerId, e => {
         e.preventDefault();
         console.log('📍 Individual point clicked, showing popup...');
         
         if (!e.features || !e.features.length) {
-            console.error('No features found in point click');
+            console.error('❌ No features found in point click');
             return;
         }
         
+        // IMPORTANT: Store feature data BEFORE the flyTo animation
         const feature = e.features[0];
         const coordinates = feature.geometry.coordinates.slice();
+        const properties = { ...feature.properties }; // Clone properties
+        
+        console.log('📋 Stored feature data:', { coordinates, properties });
+        
+        // Create a synthetic event object that won't become invalid
+        const storedEvent = {
+            features: [{
+                geometry: { coordinates: coordinates },
+                properties: properties
+            }]
+        };
         
         // Simple approach: center the point and show popup
         map.flyTo({
@@ -433,13 +483,14 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
             essential: true
         });
         
-        // Show popup after a short delay
+        // Show popup after animation with stored data
         setTimeout(() => {
-            showPopupForCategory(category, e);
+            console.log('🎪 Showing popup with stored data...');
+            showPopupForCategory(category, storedEvent);
         }, 550);
     });
 
-    // Cursor handlers with enhanced visual feedback
+    // Simple cursor handlers without paint property changes
     map.on('mouseenter', clusterLayerId, () => {
         map.getCanvas().style.cursor = 'pointer';
     });
