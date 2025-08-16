@@ -121,7 +121,7 @@ async function initMap() {
         // Add basemap switcher control
         addBasemapSwitcher();
 
-        // FIXED: Load icons properly in sequence, then create layers
+        // Load icons and create layers
         map.on('load', () => {
             console.log('🗺️ Map loaded, starting icon and layer creation...');
             loadIconsInSequence(data);
@@ -129,7 +129,6 @@ async function initMap() {
         
     } catch (error) {
         console.error('❌ Error initializing map:', error);
-        // Try to show error to user
         document.getElementById('map').innerHTML = `
             <div style="padding: 20px; color: white; background: rgba(255,0,0,0.8); margin: 20px; border-radius: 8px;">
                 <h3>Error Loading Map</h3>
@@ -140,11 +139,9 @@ async function initMap() {
     }
 }
 
-// FIXED: Use only the reliable alternative icon loading method
+// Use only the reliable icon loading method
 function loadIconsInSequence(data) {
     console.log('📸 Loading icons via reliable Image object method...');
-    console.log('📁 Current URL:', window.location.href);
-    console.log('📂 Current pathname:', window.location.pathname);
     
     const iconConfigs = [
         { file: 'popes.png', name: 'pope-icon' },
@@ -161,10 +158,9 @@ function loadIconsInSequence(data) {
         img.crossOrigin = 'anonymous';
         
         img.onload = () => {
-            console.log(`✅ ${config.name} loaded successfully as Image object (${img.width}x${img.height})`);
+            console.log(`✅ ${config.name} loaded successfully (${img.width}x${img.height})`);
             
             try {
-                // Convert to canvas then to ImageData for MapLibre
                 const canvas = document.createElement('canvas');
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -184,7 +180,6 @@ function loadIconsInSequence(data) {
                 
                 if (loadedCount === iconConfigs.length) {
                     console.log('🎯 All icons loaded successfully:', successfullyLoaded);
-                    console.log('🏗️ Creating map layers...');
                     createAllLayers(data);
                     initializeUI();
                 }
@@ -193,7 +188,6 @@ function loadIconsInSequence(data) {
                 loadedCount++;
                 
                 if (loadedCount === iconConfigs.length) {
-                    console.log('⚠️ Some icons failed, but proceeding with available ones:', successfullyLoaded);
                     if (successfullyLoaded.length > 0) {
                         createAllLayers(data);
                         initializeUI();
@@ -203,22 +197,18 @@ function loadIconsInSequence(data) {
         };
         
         img.onerror = (e) => {
-            console.error(`❌ Failed to load ${config.file} as Image object:`, e);
-            console.log(`🔄 Trying alternative paths for ${config.file}...`);
-            
-            // Try parent directory
+            console.error(`❌ Failed to load ${config.file}:`, e);
             img.src = '../' + config.file;
             img.onerror = () => {
                 console.error(`❌ Also failed: ../${config.file}`);
                 loadedCount++;
                 
                 if (loadedCount === iconConfigs.length) {
-                    console.log('⚠️ Loading complete with some failures. Successful:', successfullyLoaded);
                     if (successfullyLoaded.length > 0) {
                         createAllLayers(data);
                         initializeUI();
                     } else {
-                        console.error('❌ No icons could be loaded. Check if PNG files exist in the correct location.');
+                        console.error('❌ No icons could be loaded. Check if PNG files exist.');
                     }
                 }
             };
@@ -228,15 +218,13 @@ function loadIconsInSequence(data) {
     });
 }
 
-// FIXED: Create layers with EXACT same settings as working churches site
+// Create layers with exact same settings as working churches site
 function createAllLayers(data) {
     console.log('🏗️ Creating layers with exact working settings...');
-    console.log('📊 Processing data categories:', Object.keys(data));
     
     for (const [category, entries] of Object.entries(data)) {
         console.log(`🔄 Processing ${category}: ${entries.length} entries`);
         
-        // Validate entries have coordinates
         const validEntries = entries.filter(item => 
             item.Longitude && item.Latitude && 
             !isNaN(parseFloat(item.Longitude)) && 
@@ -272,16 +260,16 @@ function createAllLayers(data) {
 
         console.log(`🗂️ Adding source ${sourceId} with ${geojson.features.length} features`);
 
-        // Add source with EXACT same clustering settings as working site
+        // Add source with exact same clustering settings as working site
         map.addSource(sourceId, {
             type: 'geojson',
             data: geojson,
             cluster: true,
             clusterMaxZoom: 14,
-            clusterRadius: 50  // EXACT same as working site
+            clusterRadius: 50
         });
 
-        // Add cluster layer with EXACT same settings as working site
+        // Add cluster layer
         map.addLayer({
             id: clusterLayerId,
             type: 'circle',
@@ -291,14 +279,12 @@ function createAllLayers(data) {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
                     'step', ['get', 'point_count'],
-                    10, 10, 12, 30, 14, 100, 16  // EXACT same as working site
+                    10, 10, 12, 30, 14, 100, 16
                 ]
             }
         });
 
-        console.log(`🎯 Added cluster layer ${clusterLayerId}`);
-
-        // Add count layer with EXACT same settings as working site
+        // Add count layer
         map.addLayer({
             id: countLayerId,
             type: 'symbol',
@@ -311,146 +297,110 @@ function createAllLayers(data) {
             }
         });
 
-        console.log(`📊 Added count layer ${countLayerId}`);
-
-        // Add individual points layer with EXACT same icon settings as working site
-        const iconName = getCategoryIcon(category);
-        console.log(`🎨 Using icon ${iconName} for ${category} points`);
-        
+        // Add individual points layer
         map.addLayer({
             id: unclusteredLayerId,
             type: 'symbol',
             source: sourceId,
             filter: ['!', ['has', 'point_count']],
             layout: {
-                'icon-image': iconName,
-                'icon-size': 0.07,           // EXACT same as working site
-                'icon-allow-overlap': false, // EXACT same as working site (key difference!)
-                'icon-anchor': 'bottom'      // EXACT same as working site
+                'icon-image': getCategoryIcon(category),
+                'icon-size': 0.07,
+                'icon-allow-overlap': false,
+                'icon-anchor': 'bottom'
             }
         });
-
-        console.log(`🏷️ Added points layer ${unclusteredLayerId}`);
 
         // Add event handlers
         addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId);
     }
     
-    console.log('✅ All layers created successfully with exact working settings!');
-    
-    // Try to fit bounds to all features
-    setTimeout(() => {
-        try {
-            const bounds = new maplibregl.LngLatBounds();
-            let hasValidBounds = false;
-            
-            for (const [category, entries] of Object.entries(data)) {
-                entries.forEach(item => {
-                    if (item.Longitude && item.Latitude) {
-                        bounds.extend([parseFloat(item.Longitude), parseFloat(item.Latitude)]);
-                        hasValidBounds = true;
-                    }
-                });
-            }
-            
-            if (hasValidBounds && !bounds.isEmpty()) {
-                console.log('🗺️ Fitting map to data bounds');
-                map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
-            }
-        } catch (e) {
-            console.warn('Could not fit bounds:', e);
-        }
-    }, 1000);
-}
-
-// Initialize UI elements
-function initializeUI() {
-    document.getElementById('toggle-popes').checked = true;
-    document.getElementById('toggle-saints').checked = true;
-    document.getElementById('toggle-miracles').checked = true;
-    document.getElementById('legend-v2').style.display = 'block';
-    console.log('✅ UI initialized');
+    console.log('✅ All layers created successfully!');
 }
 
 // Add event handlers for clusters and points
 function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
-    // Enhanced cluster click handler with gradual dispersal
+    // FIXED: Use exact same cluster click handler as working churches site
     map.on('click', clusterLayerId, e => {
-        e.preventDefault();
+        console.log('🎯 Cluster clicked - using exact working site method');
+        
         const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
         if (!features.length) {
-            console.warn('No cluster features found');
+            console.warn('❌ No cluster features found');
             return;
         }
         
         const feature = features[0];
         const clusterId = feature.properties.cluster_id;
-        const clusterCoords = feature.geometry.coordinates.slice();
-        const pointCount = feature.properties.point_count;
+        const coordinates = feature.geometry.coordinates;
         
-        console.log(`🎯 Cluster clicked: ${pointCount} points at zoom ${map.getZoom()}`);
-        console.log('📋 Cluster ID:', clusterId);
-        console.log('📍 Cluster coords:', clusterCoords);
-        
-        // Get source object
-        const source = map.getSource(sourceId);
-        if (!source) {
-            console.error('❌ Source not found:', sourceId);
-            return;
-        }
-        
-        console.log('🔍 Getting cluster expansion zoom...');
-        
-        // Get the optimal zoom level to break this cluster apart
-        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err) {
-                console.warn('❌ Failed to get cluster expansion zoom:', err);
-                // Fallback: zoom in by 3 levels
-                const fallbackZoom = Math.min(map.getZoom() + 3, 20);
-                console.log(`🔄 Using fallback zoom: ${fallbackZoom}`);
-                map.flyTo({
-                    center: clusterCoords,
-                    zoom: fallbackZoom,
-                    duration: 1000,
-                    essential: true
-                });
-                return;
-            }
-            
-            console.log(`📈 Expanding cluster to zoom level ${zoom}`);
-            
-            // Fly to the optimal zoom level with smooth animation
-            map.flyTo({
-                center: clusterCoords,
-                zoom: Math.min(zoom + 1, 20), // Add 1 to ensure full dispersal
-                duration: 1000,
-                essential: true
-            });
-            
-            // Check if cluster is still there after zoom and continue breaking if needed
-            setTimeout(() => {
-                console.log('🔍 Checking if cluster still exists after zoom...');
-                const stillClustered = map.queryRenderedFeatures(
-                    map.project(clusterCoords), 
-                    { layers: [clusterLayerId] }
-                );
-                
-                if (stillClustered.length > 0) {
-                    console.log('🔄 Cluster still exists, zooming in further...');
-                    map.flyTo({
-                        center: clusterCoords,
-                        zoom: Math.min(map.getZoom() + 2, 20),
-                        duration: 800,
-                        essential: true
-                    });
-                } else {
-                    console.log('✅ Cluster successfully dispersed!');
-                }
-            }, 1100); // Wait for animation to complete
+        console.log('📋 Cluster details:', {
+            clusterId: clusterId,
+            pointCount: feature.properties.point_count,
+            coordinates: coordinates,
+            currentZoom: map.getZoom()
         });
+        
+        // Use EXACT same method as working churches site
+        try {
+            console.log('🔍 Calling getClusterExpansionZoom...');
+            map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
+                console.log('📞 getClusterExpansionZoom callback triggered');
+                console.log('📊 Callback params:', { err: err, zoom: zoom });
+                
+                if (err) {
+                    console.error('❌ getClusterExpansionZoom error:', err);
+                    // Fallback to simple zoom in
+                    console.log('🔄 Using fallback zoom method');
+                    map.easeTo({
+                        center: coordinates,
+                        zoom: map.getZoom() + 2,
+                        duration: 1000
+                    });
+                    return;
+                }
+                
+                console.log(`✅ Success! Zooming to level ${zoom}`);
+                
+                // Use easeTo exactly like working site
+                map.easeTo({
+                    center: coordinates,
+                    zoom: zoom,
+                    duration: 1000
+                });
+                
+                // Check if we need to zoom further after animation
+                setTimeout(() => {
+                    const remainingClusters = map.queryRenderedFeatures(
+                        map.project(coordinates), 
+                        { layers: [clusterLayerId] }
+                    );
+                    
+                    if (remainingClusters.length > 0) {
+                        console.log('🔄 Cluster still exists, zooming further...');
+                        map.easeTo({
+                            center: coordinates,
+                            zoom: map.getZoom() + 2,
+                            duration: 800
+                        });
+                    } else {
+                        console.log('✅ Cluster successfully dispersed!');
+                    }
+                }, 1100);
+            });
+        } catch (error) {
+            console.error('❌ Error calling getClusterExpansionZoom:', error);
+            // Emergency fallback
+            console.log('🚨 Using emergency fallback zoom');
+            map.easeTo({
+                center: coordinates,
+                zoom: map.getZoom() + 3,
+                duration: 1000
+            });
+        }
     });
 
-    // Fixed point click handler - store data before animation
+    // Fixed point click handler
     map.on('click', unclusteredLayerId, e => {
         e.preventDefault();
         console.log('📍 Individual point clicked, showing popup...');
@@ -460,14 +410,12 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
             return;
         }
         
-        // IMPORTANT: Store feature data BEFORE the flyTo animation
         const feature = e.features[0];
         const coordinates = feature.geometry.coordinates.slice();
-        const properties = { ...feature.properties }; // Clone properties
+        const properties = { ...feature.properties };
         
         console.log('📋 Stored feature data:', { coordinates, properties });
         
-        // Create a synthetic event object that won't become invalid
         const storedEvent = {
             features: [{
                 geometry: { coordinates: coordinates },
@@ -475,22 +423,20 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
             }]
         };
         
-        // Simple approach: center the point and show popup
         map.flyTo({
             center: coordinates,
-            zoom: Math.max(map.getZoom(), 10), // Ensure good zoom level
+            zoom: Math.max(map.getZoom(), 10),
             duration: 500,
             essential: true
         });
         
-        // Show popup after animation with stored data
         setTimeout(() => {
             console.log('🎪 Showing popup with stored data...');
             showPopupForCategory(category, storedEvent);
         }, 550);
     });
 
-    // Simple cursor handlers without paint property changes
+    // Cursor handlers
     map.on('mouseenter', clusterLayerId, () => {
         map.getCanvas().style.cursor = 'pointer';
     });
@@ -506,6 +452,15 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
     map.on('mouseleave', unclusteredLayerId, () => {
         map.getCanvas().style.cursor = '';
     });
+}
+
+// Initialize UI elements
+function initializeUI() {
+    document.getElementById('toggle-popes').checked = true;
+    document.getElementById('toggle-saints').checked = true;
+    document.getElementById('toggle-miracles').checked = true;
+    document.getElementById('legend-v2').style.display = 'block';
+    console.log('✅ UI initialized');
 }
 
 // Add basemap switcher
@@ -542,37 +497,21 @@ function addBasemapSwitcher() {
     map.addControl({ onAdd: () => switcher, onRemove: () => {} }, 'top-right');
 }
 
-// Get cluster colors - EXACT same as working site
+// Get cluster colors
 function getClusterColor(category) {
     switch (category) {
-        case 'popes': // 🔴 Shades of red
+        case 'popes':
             return ['step', ['get', 'point_count'],
-                '#ffebee', 10,  // lightest red
-                '#ef9a9a', 30,  // medium red
-                '#e57373', 100, // darker red
-                '#c62828'       // darkest red
-            ];
-        case 'saints': // 🟢 Shades of green
+                '#ffebee', 10, '#ef9a9a', 30, '#e57373', 100, '#c62828'];
+        case 'saints':
             return ['step', ['get', 'point_count'],
-                '#e8f5e9', 10,  // lightest green
-                '#a5d6a7', 30,  // medium green
-                '#66bb6a', 100, // darker green
-                '#2e7d32'       // darkest green
-            ];
-        case 'miracles': // 🔵 Shades of blue
+                '#e8f5e9', 10, '#a5d6a7', 30, '#66bb6a', 100, '#2e7d32'];
+        case 'miracles':
             return ['step', ['get', 'point_count'],
-                '#e3f2fd', 10,  // lightest blue
-                '#90caf9', 30,  // medium blue
-                '#42a5f5', 100, // darker blue
-                '#1565c0'       // darkest blue
-            ];
-        default: // fallback grey
+                '#e3f2fd', 10, '#90caf9', 30, '#42a5f5', 100, '#1565c0'];
+        default:
             return ['step', ['get', 'point_count'],
-                '#eeeeee', 10,
-                '#bdbdbd', 30,
-                '#9e9e9e', 100,
-                '#616161'
-            ];
+                '#eeeeee', 10, '#bdbdbd', 30, '#9e9e9e', 100, '#616161'];
     }
 }
 
@@ -590,7 +529,6 @@ function getCategoryIcon(category) {
 function showPopupForCategory(category, e) {
     console.log('🎪 showPopupForCategory called for:', category);
     
-    // Validate input
     if (!e || !e.features || !e.features.length) {
         console.error('❌ Invalid event object or no features found');
         return;
@@ -1017,7 +955,6 @@ function nextPope(x) {
 
 // Fix encoding function with better error handling
 function fE(str) {
-    // Handle null, undefined, or non-string values
     if (!str || typeof str !== 'string') {
         return str || '';
     }
