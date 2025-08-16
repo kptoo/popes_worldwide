@@ -473,7 +473,7 @@ function createAllLayers(data) {
             filter: ['!', ['has', 'point_count']],
             layout: {
                 'icon-image': iconName,
-                'icon-size': 0.1, // Original size
+                'icon-size': 0.01, // Original size
                 'icon-allow-overlap': true,
                 'icon-anchor': 'bottom'
             }
