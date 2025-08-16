@@ -64,12 +64,12 @@ async function initMap() {
                         minzoom: 0,
                         maxzoom: 18
                     },
-                    carto_blue: {
+                    carto_dark: {
                         type: 'raster',
                         tiles: [
-                            'https://cartodb-basemaps-a.global.ssl.fastly.net/midnight_commander/{z}/{x}/{y}.png',
-                            'https://cartodb-basemaps-b.global.ssl.fastly.net/midnight_commander/{z}/{x}/{y}.png',
-                            'https://cartodb-basemaps-c.global.ssl.fastly.net/midnight_commander/{z}/{x}/{y}.png'
+                            'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-b.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                            'https://cartodb-basemaps-c.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
                         ],
                         tileSize: 256,
                         attribution: '© CARTO © OpenStreetMap contributors',
@@ -98,7 +98,7 @@ async function initMap() {
                     }
                 },
                 layers: [
-                    { id: 'base-tiles', type: 'raster', source: 'carto_blue' }
+                    { id: 'base-tiles', type: 'raster', source: 'carto_dark' }
                 ],
                 glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
             },
