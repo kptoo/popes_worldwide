@@ -118,8 +118,7 @@ async function initMap() {
         });
         map.addControl(geolocateControl, 'top-left');
 
-        // Add basemap switcher control
-        addBasemapSwitcher();
+
 
         // FIXED: Load icons properly in sequence, then create layers
         map.on('load', () => {
@@ -505,39 +504,7 @@ function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId
     map.on('mouseleave', unclusteredLayerId, () => map.getCanvas().style.cursor = '');
 }
 
-// Add basemap switcher
-function addBasemapSwitcher() {
-    const basemaps = {
-        'Dark': 'carto_dark',
-        'Light': 'carto_positron', 
-        'Street': 'osm_standard',
-        'Terrain': 'stamen_terrain',
-        'Wiki': 'wikimedia'
-    };
 
-    const switcher = document.createElement('div');
-    switcher.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    switcher.style.cssText = 'background: white; border-radius: 4px; box-shadow: 0 0 10px rgba(0,0,0,0.1);';
-
-    const select = document.createElement('select');
-    select.style.cssText = 'border: none; background: transparent; padding: 5px; font-size: 12px; cursor: pointer;';
-
-    Object.entries(basemaps).forEach(([name, source]) => {
-        const option = document.createElement('option');
-        option.value = source;
-        option.textContent = name;
-        if (source === 'carto_dark') option.selected = true;
-        select.appendChild(option);
-    });
-
-    select.addEventListener('change', (e) => {
-        map.getLayer('base-tiles') && map.removeLayer('base-tiles');
-        map.addLayer({ id: 'base-tiles', type: 'raster', source: e.target.value }, 'background');
-    });
-
-    switcher.appendChild(select);
-    map.addControl({ onAdd: () => switcher, onRemove: () => {} }, 'top-right');
-}
 
 // Get cluster colors - EXACT same as working site
 function getClusterColor(category) {
