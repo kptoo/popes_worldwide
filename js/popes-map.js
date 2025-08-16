@@ -432,7 +432,7 @@ function createAllLayers(data) {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
                     'step', ['get', 'point_count'],
-                    10, 10, 12, 30, 14, 100, 16
+                    8, 8, 10, 24, 10, 75, 12
                 ],
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
@@ -473,7 +473,7 @@ function createAllLayers(data) {
             filter: ['!', ['has', 'point_count']],
             layout: {
                 'icon-image': iconName,
-                'icon-size': 0.07, // Original size
+                'icon-size': 0.09, // Original size
                 'icon-allow-overlap': true,
                 'icon-anchor': 'bottom'
             }
