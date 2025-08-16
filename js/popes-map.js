@@ -365,12 +365,117 @@ function createAllLayers(data) {
     }, 1000);
 }
 
+// Initialize legend toggle functionality
+function initializeLegendToggle() {
+    const legend = document.getElementById('legend-v2');
+    if (!legend) {
+        console.warn('Legend element not found');
+        return;
+    }
+
+    // Create the toggle button
+    const toggleButton = document.createElement('button');
+    toggleButton.id = 'legend-toggle-btn';
+    toggleButton.innerHTML = '−'; // Minus sign (legend starts expanded)
+    toggleButton.style.cssText = `
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 25px;
+        height: 25px;
+        border: none;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    `;
+
+    // Ensure legend has relative positioning for absolute button positioning
+    if (getComputedStyle(legend).position === 'static') {
+        legend.style.position = 'relative';
+    }
+
+    // Create a container for the legend content (everything except the button)
+    const legendContent = document.createElement('div');
+    legendContent.id = 'legend-content';
+    legendContent.style.transition = 'all 0.3s ease';
+    
+    // Move all existing legend children to the content container
+    while (legend.firstChild) {
+        legendContent.appendChild(legend.firstChild);
+    }
+    
+    // Add the content container and button to the legend
+    legend.appendChild(legendContent);
+    legend.appendChild(toggleButton);
+
+    // State tracking
+    let isExpanded = true;
+
+    // Toggle function
+    function toggleLegend() {
+        isExpanded = !isExpanded;
+        
+        if (isExpanded) {
+            // Show legend content
+            legendContent.style.display = 'block';
+            toggleButton.innerHTML = '−';
+            toggleButton.title = 'Hide legend';
+            
+            // Animate expansion
+            setTimeout(() => {
+                legendContent.style.opacity = '1';
+                legendContent.style.transform = 'translateY(0)';
+            }, 10);
+        } else {
+            // Hide legend content
+            legendContent.style.opacity = '0';
+            legendContent.style.transform = 'translateY(-10px)';
+            toggleButton.innerHTML = '+';
+            toggleButton.title = 'Show legend';
+            
+            // Hide after animation
+            setTimeout(() => {
+                legendContent.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    // Add hover effects
+    toggleButton.addEventListener('mouseenter', () => {
+        toggleButton.style.background = 'rgba(255, 255, 255, 1)';
+        toggleButton.style.transform = 'scale(1.1)';
+    });
+
+    toggleButton.addEventListener('mouseleave', () => {
+        toggleButton.style.background = 'rgba(255, 255, 255, 0.9)';
+        toggleButton.style.transform = 'scale(1)';
+    });
+
+    // Add click event
+    toggleButton.addEventListener('click', toggleLegend);
+
+    console.log('✅ Legend toggle initialized');
+}
+
 // Initialize UI elements
 function initializeUI() {
     document.getElementById('toggle-popes').checked = true;
     document.getElementById('toggle-saints').checked = true;
     document.getElementById('toggle-miracles').checked = true;
     document.getElementById('legend-v2').style.display = 'block';
+    
+    // Initialize legend toggle functionality
+    initializeLegendToggle();
+    
     console.log('✅ UI initialized');
 }
 
