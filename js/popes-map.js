@@ -320,84 +320,14 @@ function createAllLayers(data) {
 
 // Add event handlers for clusters and points
 function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
-    // FIXED: Use exact same cluster click handler as working churches site
+    // EXACT same cluster click handler as working churches site - NO MODIFICATIONS
     map.on('click', clusterLayerId, e => {
-        console.log('🎯 Cluster clicked - using exact working site method');
-        
         const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
-        if (!features.length) {
-            console.warn('❌ No cluster features found');
-            return;
-        }
-        
-        const feature = features[0];
-        const clusterId = feature.properties.cluster_id;
-        const coordinates = feature.geometry.coordinates;
-        
-        console.log('📋 Cluster details:', {
-            clusterId: clusterId,
-            pointCount: feature.properties.point_count,
-            coordinates: coordinates,
-            currentZoom: map.getZoom()
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({ center: features[0].geometry.coordinates, zoom });
         });
-        
-        // Use EXACT same method as working churches site
-        try {
-            console.log('🔍 Calling getClusterExpansionZoom...');
-            map.getSource(sourceId).getClusterExpansionZoom(clusterId, (err, zoom) => {
-                console.log('📞 getClusterExpansionZoom callback triggered');
-                console.log('📊 Callback params:', { err: err, zoom: zoom });
-                
-                if (err) {
-                    console.error('❌ getClusterExpansionZoom error:', err);
-                    // Fallback to simple zoom in
-                    console.log('🔄 Using fallback zoom method');
-                    map.easeTo({
-                        center: coordinates,
-                        zoom: map.getZoom() + 2,
-                        duration: 1000
-                    });
-                    return;
-                }
-                
-                console.log(`✅ Success! Zooming to level ${zoom}`);
-                
-                // Use easeTo exactly like working site
-                map.easeTo({
-                    center: coordinates,
-                    zoom: zoom,
-                    duration: 1000
-                });
-                
-                // Check if we need to zoom further after animation
-                setTimeout(() => {
-                    const remainingClusters = map.queryRenderedFeatures(
-                        map.project(coordinates), 
-                        { layers: [clusterLayerId] }
-                    );
-                    
-                    if (remainingClusters.length > 0) {
-                        console.log('🔄 Cluster still exists, zooming further...');
-                        map.easeTo({
-                            center: coordinates,
-                            zoom: map.getZoom() + 2,
-                            duration: 800
-                        });
-                    } else {
-                        console.log('✅ Cluster successfully dispersed!');
-                    }
-                }, 1100);
-            });
-        } catch (error) {
-            console.error('❌ Error calling getClusterExpansionZoom:', error);
-            // Emergency fallback
-            console.log('🚨 Using emergency fallback zoom');
-            map.easeTo({
-                center: coordinates,
-                zoom: map.getZoom() + 3,
-                duration: 1000
-            });
-        }
     });
 
     // Fixed point click handler
