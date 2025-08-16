@@ -140,72 +140,9 @@ async function initMap() {
     }
 }
 
-// FIXED: Use timeout to force alternative method if MapLibre fails silently
+// FIXED: Use only the reliable alternative icon loading method
 function loadIconsInSequence(data) {
-    console.log('📸 Using EXACT churches site pattern...');
-    
-    let callbackTriggered = false;
-    
-    // Set a timeout to force alternative method if MapLibre doesn't respond
-    const timeoutId = setTimeout(() => {
-        if (!callbackTriggered) {
-            console.warn('⏰ MapLibre loadImage timeout - forcing alternative method');
-            loadIconsAlternative(data);
-        }
-    }, 2000); // 2 second timeout
-    
-    // Load pope icon first - EXACT same pattern as working site
-    console.log('📸 Loading pope-icon exactly like churches site...');
-    console.log('🔍 Attempting to load: popes.png');
-    
-    map.loadImage('popes.png', (error, image) => {
-        callbackTriggered = true;
-        clearTimeout(timeoutId);
-        console.log('🎉 MapLibre callback finally triggered!');
-        
-        if (error) { 
-            console.error('Error loading popes.png:', error); 
-            console.log('🔄 Switching to alternative method due to error...');
-            loadIconsAlternative(data);
-            return;
-        }
-        if (!map.hasImage('pope-icon')) map.addImage('pope-icon', image);
-        console.log('✅ Loaded popes.png successfully');
-
-        // Load saint icon second
-        console.log('📸 Loading saint-icon...');
-        map.loadImage('saints.png', (error, image) => {
-            if (error) { 
-                console.error('Error loading saints.png:', error); 
-                loadIconsAlternative(data);
-                return;
-            }
-            if (!map.hasImage('saint-icon')) map.addImage('saint-icon', image);
-            console.log('✅ Loaded saints.png successfully');
-
-            // Load miracle icon third
-            console.log('📸 Loading miracle-icon...');
-            map.loadImage('miracles.png', (error, image) => {
-                if (error) { 
-                    console.error('Error loading miracles.png:', error); 
-                    loadIconsAlternative(data);
-                    return;
-                }
-                if (!map.hasImage('miracle-icon')) map.addImage('miracle-icon', image);
-                console.log('✅ Loaded miracles.png successfully');
-
-                // ONLY after ALL original icons are loaded successfully, create the map layers
-                console.log('🎯 All original icons loaded, creating map layers...');
-                createAllLayers(data);
-                initializeUI();
-            });
-        });
-    });
-}
-
-// Alternative loading method using Image objects then converting to MapLibre format
-function loadIconsAlternative(data) {
-    console.log('🔄 Using alternative icon loading method...');
+    console.log('📸 Loading icons via reliable Image object method...');
     console.log('📁 Current URL:', window.location.href);
     console.log('📂 Current pathname:', window.location.pathname);
     
@@ -240,13 +177,13 @@ function loadIconsAlternative(data) {
                     map.removeImage(config.name);
                 }
                 map.addImage(config.name, imageData);
-                console.log(`✅ ${config.name} added to map via alternative method`);
+                console.log(`✅ ${config.name} added to map successfully`);
                 
                 successfullyLoaded.push(config.name);
                 loadedCount++;
                 
                 if (loadedCount === iconConfigs.length) {
-                    console.log('🎯 All icons loaded via alternative method:', successfullyLoaded);
+                    console.log('🎯 All icons loaded successfully:', successfullyLoaded);
                     console.log('🏗️ Creating map layers...');
                     createAllLayers(data);
                     initializeUI();
@@ -291,87 +228,9 @@ function loadIconsAlternative(data) {
     });
 }
 
-// Helper function to try loading an icon from multiple possible paths - SAME ORIGIN ONLY
-function tryLoadIcon(primaryPath, iconName, onSuccess) {
-    // Only try local/same-origin paths to avoid CORS issues
-    const possiblePaths = [
-        primaryPath,           // e.g., 'popes.png' 
-        `../${primaryPath}`,   // e.g., '../popes.png'
-        `pages/${primaryPath}` // e.g., 'pages/popes.png'
-    ];
-    
-    let currentPathIndex = 0;
-    
-    function attemptLoad() {
-        if (currentPathIndex >= possiblePaths.length) {
-            console.error(`❌ Failed to load ${iconName} from any local path:`, possiblePaths);
-            console.error('Make sure the PNG files are in the correct directory relative to your HTML file');
-            return;
-        }
-        
-        const currentPath = possiblePaths[currentPathIndex];
-        console.log(`🔄 Trying to load ${iconName} from: ${currentPath}`);
-        
-        map.loadImage(currentPath, (error, image) => {
-            if (error) {
-                console.warn(`⚠️ Failed to load ${iconName} from ${currentPath}:`, error.message);
-                currentPathIndex++;
-                attemptLoad(); // Try next path
-            } else {
-                console.log(`✅ Successfully loaded ${iconName} from: ${currentPath}`);
-                if (!map.hasImage(iconName)) map.addImage(iconName, image);
-                onSuccess();
-            }
-        });
-    }
-    
-    attemptLoad();
-}
-
-// Helper function to create fallback icons
-function createFallbackIcon(iconName, color, symbol) {
-    try {
-        const size = 48;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        
-        // Draw filled circle
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        // Draw white border
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        
-        // Draw symbol
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(symbol, size/2, size/2);
-        
-        // Add to map
-        const imgData = ctx.getImageData(0, 0, size, size);
-        if (map.hasImage(iconName)) {
-            map.removeImage(iconName);
-        }
-        map.addImage(iconName, imgData);
-        console.log(`✅ Created fallback ${iconName} with symbol ${symbol}`);
-        return true;
-    } catch (error) {
-        console.error(`❌ Failed to create fallback icon ${iconName}:`, error);
-        return false;
-    }
-}
-
-// FIXED: Create layers only after icons are guaranteed to exist
+// FIXED: Create layers with EXACT same settings as working churches site
 function createAllLayers(data) {
-    console.log('🏗️ Creating layers with loaded icons...');
+    console.log('🏗️ Creating layers with exact working settings...');
     console.log('📊 Processing data categories:', Object.keys(data));
     
     for (const [category, entries] of Object.entries(data)) {
@@ -413,16 +272,16 @@ function createAllLayers(data) {
 
         console.log(`🗂️ Adding source ${sourceId} with ${geojson.features.length} features`);
 
-        // Add source
+        // Add source with EXACT same clustering settings as working site
         map.addSource(sourceId, {
             type: 'geojson',
             data: geojson,
             cluster: true,
             clusterMaxZoom: 14,
-            clusterRadius: 25
+            clusterRadius: 50  // EXACT same as working site
         });
 
-        // Add cluster layer
+        // Add cluster layer with EXACT same settings as working site
         map.addLayer({
             id: clusterLayerId,
             type: 'circle',
@@ -432,17 +291,15 @@ function createAllLayers(data) {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
                     'step', ['get', 'point_count'],
-                    8, 8, 10, 24, 10, 75, 12
-                ],
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff',
-                'circle-opacity': 0.9
+                    10, 10, 12, 30, 14, 100, 16  // EXACT same as working site
+                ]
+                // No stroke properties - same as working site
             }
         });
 
         console.log(`🎯 Added cluster layer ${clusterLayerId}`);
 
-        // Add count layer
+        // Add count layer with EXACT same settings as working site
         map.addLayer({
             id: countLayerId,
             type: 'symbol',
@@ -452,17 +309,13 @@ function createAllLayers(data) {
                 'text-field': '{point_count_abbreviated}',
                 'text-font': ['Noto Sans Regular'],
                 'text-size': 12
-            },
-            paint: {
-                'text-color': '#ffffff',
-                'text-halo-color': '#000000',
-                'text-halo-width': 1
             }
+            // No paint properties - same as working site
         });
 
         console.log(`📊 Added count layer ${countLayerId}`);
 
-        // Add individual points layer - ORIGINAL ICONS ONLY!
+        // Add individual points layer with EXACT same icon settings as working site
         const iconName = getCategoryIcon(category);
         console.log(`🎨 Using icon ${iconName} for ${category} points`);
         
@@ -473,9 +326,9 @@ function createAllLayers(data) {
             filter: ['!', ['has', 'point_count']],
             layout: {
                 'icon-image': iconName,
-                'icon-size': 0.09, // Original size
-                'icon-allow-overlap': true,
-                'icon-anchor': 'bottom'
+                'icon-size': 0.07,           // EXACT same as working site
+                'icon-allow-overlap': false, // EXACT same as working site (key difference!)
+                'icon-anchor': 'bottom'      // EXACT same as working site
             }
         });
 
@@ -485,7 +338,7 @@ function createAllLayers(data) {
         addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId);
     }
     
-    console.log('✅ All layers created successfully with proper icons!');
+    console.log('✅ All layers created successfully with exact working settings!');
     
     // Try to fit bounds to all features
     setTimeout(() => {
@@ -523,21 +376,15 @@ function initializeUI() {
 
 // Add event handlers for clusters and points
 function addEventHandlers(category, clusterLayerId, unclusteredLayerId, sourceId) {
-    // Cluster click handler
+    // Cluster click handler - same as working site
     map.on('click', clusterLayerId, e => {
         const features = map.queryRenderedFeatures(e.point, { layers: [clusterLayerId] });
         if (!features.length) return;
         
-        const currentZoom = map.getZoom();
-        const coordinates = features[0].geometry.coordinates.slice();
-        const targetZoom = Math.min(currentZoom + 5, 18);
-        
-        console.log(`🎯 Zooming from ${currentZoom} to ${targetZoom}`);
-        
-        map.flyTo({
-            center: coordinates,
-            zoom: targetZoom,
-            duration: 1500
+        // Simple zoom in by 2 levels - same as working site
+        map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: map.getZoom() + 2
         });
     });
 
@@ -587,21 +434,37 @@ function addBasemapSwitcher() {
     map.addControl({ onAdd: () => switcher, onRemove: () => {} }, 'top-right');
 }
 
-// Get cluster colors
+// Get cluster colors - EXACT same as working site
 function getClusterColor(category) {
     switch (category) {
-        case 'popes':
+        case 'popes': // 🔴 Shades of red
             return ['step', ['get', 'point_count'],
-                '#ffcdd2', 10, '#ef5350', 30, '#e53935', 100, '#c62828'];
-        case 'saints':
+                '#ffebee', 10,  // lightest red
+                '#ef9a9a', 30,  // medium red
+                '#e57373', 100, // darker red
+                '#c62828'       // darkest red
+            ];
+        case 'saints': // 🟢 Shades of green
             return ['step', ['get', 'point_count'],
-                '#c8e6c9', 10, '#66bb6a', 30, '#4caf50', 100, '#2e7d32'];
-        case 'miracles':
+                '#e8f5e9', 10,  // lightest green
+                '#a5d6a7', 30,  // medium green
+                '#66bb6a', 100, // darker green
+                '#2e7d32'       // darkest green
+            ];
+        case 'miracles': // 🔵 Shades of blue
             return ['step', ['get', 'point_count'],
-                '#bbdefb', 10, '#42a5f5', 30, '#2196f3', 100, '#1565c0'];
-        default:
+                '#e3f2fd', 10,  // lightest blue
+                '#90caf9', 30,  // medium blue
+                '#42a5f5', 100, // darker blue
+                '#1565c0'       // darkest blue
+            ];
+        default: // fallback grey
             return ['step', ['get', 'point_count'],
-                '#eeeeee', 10, '#bdbdbd', 30, '#9e9e9e', 100, '#616161'];
+                '#eeeeee', 10,
+                '#bdbdbd', 30,
+                '#9e9e9e', 100,
+                '#616161'
+            ];
     }
 }
 
