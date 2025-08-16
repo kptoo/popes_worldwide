@@ -140,102 +140,120 @@ async function initMap() {
     }
 }
 
-// FIXED: Load icons with comprehensive debugging to understand the issue
+// FIXED: Use EXACT same pattern as working churches site - no path detection, simple loading
 function loadIconsInSequence(data) {
-    console.log('📸 Loading icons using same approach as working legend...');
+    console.log('📸 Using EXACT churches site pattern...');
     
-    // Auto-detect path based on current URL (for pages/ subfolder support)
-    const iconPath = window.location.pathname.includes('/pages/') ? '../' : '';
-    console.log('🔍 Detected icon path prefix:', iconPath);
-    
-    // Test if we can create a regular image first (like the legend does)
-    const testImg = new Image();
-    testImg.onload = () => {
-        console.log('✅ Regular image loading works for popes.png');
-        loadMapIcons();
-    };
-    testImg.onerror = (e) => {
-        console.error('❌ Even regular image loading fails for popes.png:', e);
-        console.error('This means the PNG files are not accessible at the expected path');
-    };
-    testImg.src = iconPath + 'popes.png';
-    
-    function loadMapIcons() {
-        console.log('🗺️ Starting MapLibre icon loading...');
-        
-        // Load pope icon with detailed logging
-        console.log('📸 Attempting to load pope icon via MapLibre...');
-        map.loadImage(iconPath + 'popes.png', (error, image) => {
-            console.log('📸 Pope icon callback triggered');
+    // Load pope icon first - EXACT same pattern as working site
+    console.log('📸 Loading pope-icon exactly like churches site...');
+    map.loadImage('popes.png', (error, image) => {
+        if (error) { 
+            console.error('Error loading popes.png:', error); 
+            console.log('🔄 Trying alternative approach...');
+            // If simple path fails, try a slightly different approach
+            setTimeout(() => loadIconsAlternative(data), 100);
+            return;
+        }
+        if (!map.hasImage('pope-icon')) map.addImage('pope-icon', image);
+        console.log('✅ Loaded popes.png successfully');
+
+        // Load saint icon second
+        console.log('📸 Loading saint-icon...');
+        map.loadImage('saints.png', (error, image) => {
             if (error) { 
-                console.error('❌ Error loading popes.png via MapLibre:', error);
-                console.error('Error details:', {
-                    message: error.message,
-                    name: error.name,
-                    stack: error.stack
-                });
+                console.error('Error loading saints.png:', error); 
+                setTimeout(() => loadIconsAlternative(data), 100);
                 return;
             }
-            
-            console.log('✅ Pope image loaded successfully, adding to map...');
-            try {
-                if (map.hasImage('pope-icon')) {
-                    console.log('🔄 Removing existing pope-icon');
-                    map.removeImage('pope-icon');
-                }
-                map.addImage('pope-icon', image);
-                console.log('✅ Pope icon added to map successfully');
-            } catch (addError) {
-                console.error('❌ Error adding pope icon to map:', addError);
-                return;
-            }
+            if (!map.hasImage('saint-icon')) map.addImage('saint-icon', image);
+            console.log('✅ Loaded saints.png successfully');
 
-            // Load saint icon
-            console.log('📸 Attempting to load saint icon via MapLibre...');
-            map.loadImage(iconPath + 'saints.png', (error, image) => {
-                console.log('📸 Saint icon callback triggered');
+            // Load miracle icon third
+            console.log('📸 Loading miracle-icon...');
+            map.loadImage('miracles.png', (error, image) => {
                 if (error) { 
-                    console.error('❌ Error loading saints.png via MapLibre:', error);
+                    console.error('Error loading miracles.png:', error); 
+                    setTimeout(() => loadIconsAlternative(data), 100);
                     return;
                 }
-                
-                console.log('✅ Saint image loaded successfully, adding to map...');
-                try {
-                    if (map.hasImage('saint-icon')) map.removeImage('saint-icon');
-                    map.addImage('saint-icon', image);
-                    console.log('✅ Saint icon added to map successfully');
-                } catch (addError) {
-                    console.error('❌ Error adding saint icon to map:', addError);
-                    return;
-                }
+                if (!map.hasImage('miracle-icon')) map.addImage('miracle-icon', image);
+                console.log('✅ Loaded miracles.png successfully');
 
-                // Load miracle icon
-                console.log('📸 Attempting to load miracle icon via MapLibre...');
-                map.loadImage(iconPath + 'miracles.png', (error, image) => {
-                    console.log('📸 Miracle icon callback triggered');
-                    if (error) { 
-                        console.error('❌ Error loading miracles.png via MapLibre:', error);
-                        return;
-                    }
-                    
-                    console.log('✅ Miracle image loaded successfully, adding to map...');
-                    try {
-                        if (map.hasImage('miracle-icon')) map.removeImage('miracle-icon');
-                        map.addImage('miracle-icon', image);
-                        console.log('✅ Miracle icon added to map successfully');
-                    } catch (addError) {
-                        console.error('❌ Error adding miracle icon to map:', addError);
-                        return;
-                    }
-
-                    // ALL icons loaded successfully
-                    console.log('🎯 All original icons loaded successfully, creating map layers...');
-                    createAllLayers(data);
-                    initializeUI();
-                });
+                // ONLY after ALL original icons are loaded successfully, create the map layers
+                console.log('🎯 All original icons loaded, creating map layers...');
+                createAllLayers(data);
+                initializeUI();
             });
         });
-    }
+    });
+}
+
+// Alternative loading method using Image objects then converting to MapLibre format
+function loadIconsAlternative(data) {
+    console.log('🔄 Trying alternative icon loading method...');
+    
+    const iconConfigs = [
+        { file: 'popes.png', name: 'pope-icon' },
+        { file: 'saints.png', name: 'saint-icon' },
+        { file: 'miracles.png', name: 'miracle-icon' }
+    ];
+    
+    let loadedCount = 0;
+    
+    iconConfigs.forEach(config => {
+        console.log(`📸 Loading ${config.name} via Image object...`);
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // Important for MapLibre
+        
+        img.onload = () => {
+            console.log(`✅ ${config.name} loaded as Image object`);
+            
+            // Convert to canvas then to ImageData for MapLibre
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
+            try {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                if (!map.hasImage(config.name)) {
+                    map.addImage(config.name, imageData);
+                    console.log(`✅ ${config.name} added to map via alternative method`);
+                }
+                
+                loadedCount++;
+                if (loadedCount === iconConfigs.length) {
+                    console.log('🎯 All icons loaded via alternative method, creating layers...');
+                    createAllLayers(data);
+                    initializeUI();
+                }
+            } catch (e) {
+                console.error(`❌ Error processing ${config.name}:`, e);
+            }
+        };
+        
+        img.onerror = (e) => {
+            console.error(`❌ Failed to load ${config.name} via Image object:`, e);
+        };
+        
+        // Try multiple paths
+        const paths = [config.file, `../${config.file}`, `pages/${config.file}`];
+        img.src = paths[0];
+        
+        // If first path fails, try others
+        img.onerror = () => {
+            console.warn(`⚠️ ${paths[0]} failed, trying ${paths[1]}`);
+            img.src = paths[1];
+            img.onerror = () => {
+                console.warn(`⚠️ ${paths[1]} failed, trying ${paths[2]}`);
+                img.src = paths[2];
+                img.onerror = () => {
+                    console.error(`❌ All paths failed for ${config.name}`);
+                };
+            };
+        };
+    });
 }
 
 // Helper function to try loading an icon from multiple possible paths - SAME ORIGIN ONLY
