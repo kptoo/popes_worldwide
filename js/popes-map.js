@@ -169,20 +169,21 @@ function loadIconsInSequence(data) {
     });
 }
 
-// Helper function to try loading an icon from multiple possible paths
+// Helper function to try loading an icon from multiple possible paths - SAME ORIGIN ONLY
 function tryLoadIcon(primaryPath, iconName, onSuccess) {
+    // Only try local/same-origin paths to avoid CORS issues
     const possiblePaths = [
-        primaryPath,
-        `../${primaryPath}`,
-        `/${primaryPath}`,
-        `pages/${primaryPath}`
+        primaryPath,           // e.g., 'popes.png' 
+        `../${primaryPath}`,   // e.g., '../popes.png'
+        `pages/${primaryPath}` // e.g., 'pages/popes.png'
     ];
     
     let currentPathIndex = 0;
     
     function attemptLoad() {
         if (currentPathIndex >= possiblePaths.length) {
-            console.error(`❌ Failed to load ${iconName} from any path:`, possiblePaths);
+            console.error(`❌ Failed to load ${iconName} from any local path:`, possiblePaths);
+            console.error('Make sure the PNG files are in the correct directory relative to your HTML file');
             return;
         }
         
