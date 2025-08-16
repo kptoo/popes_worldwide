@@ -140,57 +140,69 @@ async function initMap() {
     }
 }
 
-// FIXED: Load icons in proper sequence like the working churches site
+// FIXED: Load icons in proper sequence like the working churches site - ORIGINAL ICONS ONLY
 function loadIconsInSequence(data) {
-    console.log('📸 Starting icon loading process...');
-    console.log('📊 Data received:', data);
+    console.log('📸 Loading pope-icon...');
     
-    // Create all fallback icons first to ensure they exist
-    createFallbackIcon('pope-icon', '#ef5350', '♛');
-    createFallbackIcon('saint-icon', '#66bb6a', '✝');
-    createFallbackIcon('miracle-icon', '#42a5f5', '★');
+    // Try multiple paths for pope icon
+    const popeIconPaths = ['popes.png', '../popes.png', '/popes.png', 'pages/popes.png'];
     
-    console.log('✅ All fallback icons created, proceeding to create layers...');
+    tryLoadIcon('popes.png', 'pope-icon', () => {
+        console.log('✅ Loaded popes.png successfully');
+
+        // Load saint icon second
+        console.log('📸 Loading saint-icon...');
+        tryLoadIcon('saints.png', 'saint-icon', () => {
+            console.log('✅ Loaded saints.png successfully');
+
+            // Load miracle icon third
+            console.log('📸 Loading miracle-icon...');
+            tryLoadIcon('miracles.png', 'miracle-icon', () => {
+                console.log('✅ Loaded miracles.png successfully');
+
+                // ONLY after ALL original icons are loaded successfully, create the map layers
+                console.log('🎯 All original icons loaded, creating map layers...');
+                createAllLayers(data);
+                initializeUI();
+            });
+        });
+    });
+}
+
+// Helper function to try loading an icon from multiple possible paths
+function tryLoadIcon(primaryPath, iconName, onSuccess) {
+    const possiblePaths = [
+        primaryPath,
+        `../${primaryPath}`,
+        `/${primaryPath}`,
+        `pages/${primaryPath}`
+    ];
     
-    // Try to load PNG icons in background, but don't wait for them
-    setTimeout(() => {
-        console.log('📸 Attempting to load PNG icons...');
+    let currentPathIndex = 0;
+    
+    function attemptLoad() {
+        if (currentPathIndex >= possiblePaths.length) {
+            console.error(`❌ Failed to load ${iconName} from any path:`, possiblePaths);
+            return;
+        }
         
-        map.loadImage('popes.png', (error, image) => {
-            if (!error && image) {
-                console.log('✅ Loaded popes.png, replacing fallback');
-                if (map.hasImage('pope-icon')) map.removeImage('pope-icon');
-                map.addImage('pope-icon', image);
+        const currentPath = possiblePaths[currentPathIndex];
+        console.log(`🔄 Trying to load ${iconName} from: ${currentPath}`);
+        
+        map.loadImage(currentPath, (error, image) => {
+            if (error) {
+                console.warn(`⚠️ Failed to load ${iconName} from ${currentPath}:`, error.message);
+                currentPathIndex++;
+                attemptLoad(); // Try next path
             } else {
-                console.log('ℹ️ Using fallback for popes.png:', error?.message);
+                console.log(`✅ Successfully loaded ${iconName} from: ${currentPath}`);
+                if (!map.hasImage(iconName)) map.addImage(iconName, image);
+                onSuccess();
             }
         });
-
-        map.loadImage('saints.png', (error, image) => {
-            if (!error && image) {
-                console.log('✅ Loaded saints.png, replacing fallback');
-                if (map.hasImage('saint-icon')) map.removeImage('saint-icon');
-                map.addImage('saint-icon', image);
-            } else {
-                console.log('ℹ️ Using fallback for saints.png:', error?.message);
-            }
-        });
-
-        map.loadImage('miracles.png', (error, image) => {
-            if (!error && image) {
-                console.log('✅ Loaded miracles.png, replacing fallback');
-                if (map.hasImage('miracle-icon')) map.removeImage('miracle-icon');
-                map.addImage('miracle-icon', image);
-            } else {
-                console.log('ℹ️ Using fallback for miracles.png:', error?.message);
-            }
-        });
-    }, 100);
+    }
     
-    // Create layers immediately with fallback icons
-    console.log('🎯 Creating map layers with fallback icons...');
-    createAllLayers(data);
-    initializeUI();
+    attemptLoad();
 }
 
 // Helper function to create fallback icons
@@ -297,7 +309,7 @@ function createAllLayers(data) {
                 'circle-color': getClusterColor(category),
                 'circle-radius': [
                     'step', ['get', 'point_count'],
-                    15, 10, 20, 30, 25, 100, 30
+                    10, 10, 12, 30, 14, 100, 16
                 ],
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
@@ -327,7 +339,7 @@ function createAllLayers(data) {
 
         console.log(`📊 Added count layer ${countLayerId}`);
 
-        // Add individual points layer - Icons are guaranteed to exist now!
+        // Add individual points layer - ORIGINAL ICONS ONLY!
         const iconName = getCategoryIcon(category);
         console.log(`🎨 Using icon ${iconName} for ${category} points`);
         
@@ -338,7 +350,7 @@ function createAllLayers(data) {
             filter: ['!', ['has', 'point_count']],
             layout: {
                 'icon-image': iconName,
-                'icon-size': 0.8, // Increased size for better visibility
+                'icon-size': 0.1, // Original size
                 'icon-allow-overlap': true,
                 'icon-anchor': 'bottom'
             }
